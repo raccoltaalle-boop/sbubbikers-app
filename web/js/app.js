@@ -1033,8 +1033,19 @@ async function condividiTesto(testo) {
 
 
 // ---------- service worker (app installabile / offline) ----------------
+// Aggiornamenti automatici: quando esce una nuova versione l'app si ricarica da sola
 if ("serviceWorker" in navigator && location.protocol === "https:") {
-  navigator.serviceWorker.register("sw.js").catch(() => {});
+  const aveva = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((reg) => {
+    const controlla = () => reg.update().catch(() => {});
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) controlla(); });
+    setInterval(controlla, 30 * 60 * 1000);
+  }).catch(() => {});
+  let ricaricato = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!aveva || ricaricato || $sheet.innerHTML) return; // non interrompere chi sta compilando un modulo
+    ricaricato = true; location.reload();
+  });
 }
 
 start().catch((e) => {
