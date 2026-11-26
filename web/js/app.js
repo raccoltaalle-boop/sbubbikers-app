@@ -870,7 +870,12 @@ const nomeSito = (u) => { try { return new URL(u).hostname.replace(/^www\./, "")
 
 async function tabGare(main) {
   const gare = await api.gare();
-  state.gCat = state.gCat || null; state.gReg = state.gReg || null;
+  state.gCat = state.gCat || null; state.gReg = state.gReg || null; state.gVista = state.gVista || "calendario";
+  const conSquadra = gare.filter((g) => g.adesioni.some((a) => a.stato === "vado"));
+  const seg = `<div class="seg" style="margin-bottom:8px">
+    <button data-gv="calendario" aria-pressed="${state.gVista === "calendario"}">Calendario</button>
+    <button data-gv="squadra" aria-pressed="${state.gVista === "squadra"}">🙋 La squadra va${conSquadra.length ? ` · ${conSquadra.length}` : ""}</button></div>`;
+  if (state.gVista === "squadra") return vistaSquadra(main, gare, conSquadra, seg);
   const conta = (c) => gare.filter((g) => g.categoria === c).length;
   const perCat = gare.filter((g) => !state.gCat || g.categoria === state.gCat);
   // Emilia-Romagna sempre per prima (anche senza gare), poi le altre regioni presenti in ordine alfabetico
@@ -879,7 +884,7 @@ async function tabGare(main) {
   if (state.gReg && !regioni.includes(state.gReg)) state.gReg = null;
   const lista = perCat.filter((g) => !state.gReg || g.regione === state.gReg);
 
-  let html = `<div class="chips">
+  let html = seg + `<div class="chips">
       <button class="chip" data-gc="" aria-pressed="${!state.gCat}">Tutte</button>
       ${Object.entries(CAT_GARE).map(([k, c]) => `<button class="chip" data-gc="${k}" aria-pressed="${state.gCat === k}">${c.ico} ${c.lbl}${conta(k) ? ` <small>· ${conta(k)}</small>` : ""}</button>`).join("")}
     </div>
@@ -900,16 +905,20 @@ async function tabGare(main) {
     }
   }
   main.innerHTML = html;
-
+  attivaGare(main, gare);
   main.querySelectorAll("[data-gc]").forEach((b) => (b.onclick = () => { state.gCat = b.dataset.gc || null; tabGare(main); }));
   main.querySelectorAll("[data-gr]").forEach((b) => (b.onclick = () => { state.gReg = b.dataset.gr || null; tabGare(main); }));
+}
+
+function attivaGare(main, gare) {
+  main.querySelectorAll("[data-gv]").forEach((b) => (b.onclick = () => { state.gVista = b.dataset.gv; window.scrollTo(0, 0); tabGare(main); }));
   main.querySelectorAll("[data-ad]").forEach((b) => (b.onclick = async () => {
     b.disabled = true;
     const [id, st] = b.dataset.ad.split("|");
     const g = gare.find((x) => x.id === id);
     const attuale = g.adesioni.find((a) => a.socio_id === api.me.id)?.stato;
     const nuovo = attuale === st ? null : st;
-    await prova(() => api.aderisciGara(id, nuovo), nuovo === "vado" ? "Ci vai! 🏁" : nuovo === "interessa" ? "Segnata come interessante" : "Tolta");
+    await prova(() => api.aderisciGara(id, nuovo), nuovo === "vado" ? (state.gVista === "squadra" ? "Ti sei aggregato! 🏁" : "Ci vai! 🏁") : nuovo === "interessa" ? "Segnata come interessante" : "Tolta");
     tabGare(main);
   }));
   main.querySelectorAll("[data-gmod]").forEach((b) => (b.onclick = () => sheetGara(gare.find((x) => x.id === b.dataset.gmod))));
@@ -919,7 +928,25 @@ async function tabGare(main) {
   }));
 }
 
-function cardGara(g, d) {
+// Riepilogo: solo le gare dove qualcuno ha detto "Ci vado", con i nomi
+function vistaSquadra(main, gare, lista, seg) {
+  let html = seg + `<p class="hint" style="margin:4px 2px 6px">Le gare a cui partecipano i soci. Tocca <b>Mi aggrego</b> per unirti e organizzarvi insieme.</p>`;
+  if (!lista.length) {
+    html += `<div class="empty"><div class="big">🙋</div><p><b>Ancora nessuno ha messo "Ci vado".</b><br>Apri il Calendario e segna le gare a cui parteciperai.</p></div>`;
+  } else {
+    let mese = null;
+    for (const g of lista) {
+      const d = new Date(g.data + "T12:00:00");
+      const k = `${d.getFullYear()}-${d.getMonth()}`;
+      if (k !== mese) { mese = k; html += `<div class="day"><h2>${h(d.toLocaleDateString("it-IT", { month: "long" }))}</h2><small>${d.getFullYear()}</small></div>`; }
+      html += cardGara(g, d, true);
+    }
+  }
+  main.innerHTML = html;
+  attivaGare(main, gare);
+}
+
+function cardGara(g, d, dettaglio = false) {
   const mio = g.adesioni.find((a) => a.socio_id === api.me.id)?.stato;
   const vanno = g.adesioni.filter((a) => a.stato === "vado"), interessati = g.adesioni.filter((a) => a.stato === "interessa");
   const persone = [...vanno, ...interessati];
@@ -934,12 +961,16 @@ function cardGara(g, d) {
       ${g.note ? `<p class="note" style="margin-top:6px">${h(g.note)}</p>` : ""}
       ${link ? `<a class="src" href="${link}" target="_blank" rel="noopener">Dettagli e iscrizioni: ${h(nomeSito(g.link))} ↗</a>` : ""}
     </div>
+    ${dettaglio ? `<div class="chi-va">
+      <div><b>🙋 Ci vanno (${vanno.length}):</b> ${vanno.map((p) => h(`${p.nome} ${p.cognome}`)).join(", ")}</div>
+      ${interessati.length ? `<div class="meta">🤔 Interessati: ${interessati.map((p) => h(`${p.nome} ${p.cognome}`)).join(", ")}</div>` : ""}
+    </div>` : ""}
     <div class="racefoot">
       <div class="people">${persone.slice(0, 4).map((p) => `<span class="avatar" ${p.stato === "interessa" ? 'style="background:var(--muted)"' : ""} title="${h(p.nome)} ${h(p.cognome)}">${h(iniziali(p))}</span>`).join("")}
         <span class="people-txt">${txt || "Nessuno ancora"}</span></div>
       <div class="row-actions" style="margin:0;flex-wrap:nowrap">
         <button class="btn small ${mio === "interessa" ? "going" : "ghost"}" data-ad="${g.id}|interessa">${mio === "interessa" ? "✓ " : ""}Mi interessa</button>
-        <button class="btn small ${mio === "vado" ? "going" : "accent"}" data-ad="${g.id}|vado">${mio === "vado" ? "✓ Ci vado" : "Ci vado"}</button>
+        <button class="btn small ${mio === "vado" ? "going" : "accent"}" data-ad="${g.id}|vado">${mio === "vado" ? "✓ Ci vado" : dettaglio ? "Mi aggrego" : "Ci vado"}</button>
       </div>
     </div>
     ${isAdmin() ? `<div class="row-actions" style="grid-column:1/-1;margin-top:0"><button class="link-btn" data-gmod="${g.id}">Modifica</button><button class="link-btn" data-gdel="${g.id}">Elimina</button></div>` : ""}
