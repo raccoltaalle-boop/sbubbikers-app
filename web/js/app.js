@@ -571,14 +571,16 @@ async function tabDivise(main) {
               <span class="status ${st.cls}">${st.ico} ${st.lbl}</span>
               ${p.stato !== "annullata" ? `<span class="status ${p.pagato ? "st-ok" : "st-wait"}">${p.pagato ? "€ Pagato" : "€ Da pagare"}</span>` : ""}
             </div>
-            ${["attesa", "confermata"].includes(p.stato) ? `<button class="link-btn" data-ann="${h(p.id)}" style="margin-top:8px">Annulla prenotazione</button>` : ""}
+            ${["attesa", "confermata", "pronta"].includes(p.stato) ? `<button class="link-btn" data-ann="${h(p.id)}" style="margin-top:8px">Annulla prenotazione</button>` : ""}
           </div></article>`;
       }).join("")}
       <div class="card"><h3>💶 Come pagare</h3><p>Contanti al ritiro in sede, oppure bonifico:</p>
         <p class="meta">IBAN: IT00 X000 0000 0000 0000 0000 000 (esempio)<br>Causale: Divise – ${h(api.me.nome)} ${h(api.me.cognome)}</p></div>`
       : `<div class="empty"><div class="big">👕</div><p>Nessuna prenotazione.<br>Dai un'occhiata al catalogo!</p></div>`;
     body.querySelectorAll("[data-ann]").forEach((b) => (b.onclick = async () => {
-      if (!(await dialogo({ testo: "Annullare questa prenotazione?", ok: "Annulla prenotazione", pericolo: true }))) return;
+      const pr = mie.find((x) => x.id === b.dataset.ann);
+      const testo = pr?.stato === "pronta" ? "Il capo è già pronto per te in sede. Annullare comunque la prenotazione?" : "Annullare questa prenotazione?";
+      if (!(await dialogo({ testo, ok: "Annulla prenotazione", pericolo: true }))) return;
       await prova(() => api.annullaPrenotazione(b.dataset.ann), "Prenotazione annullata"); tabDivise(main);
     }));
   }

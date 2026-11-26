@@ -172,6 +172,7 @@ export function createApi() {
     async annullaPrenotazione(id) {
       const p = db.prenotazioni.find((x) => x.id === id);
       if (p.socio_id !== db.me && meObj()?.ruolo !== "admin") throw new Error("Permesso negato");
+      if (p.stato === "consegnata" && meObj()?.ruolo !== "admin") throw new Error("Capo già consegnato: contatta un admin");
       const c = db.capi.find((x) => x.id === p.capo_id);
       if (p.scalato && p.stato !== "consegnata") c.taglie.find((x) => x.t === p.taglia).disp += p.qta;
       p.stato = "annullata"; save();
