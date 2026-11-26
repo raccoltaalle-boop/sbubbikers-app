@@ -176,10 +176,25 @@ async function renderTab() {
 }
 
 // ---------- USCITE -----------------------------------------------------
+function cardCompleanni(lista) {
+  if (!lista?.length) return "";
+  const oggi = lista.filter((c) => c.tra_giorni === 0), poi = lista.filter((c) => c.tra_giorni > 0);
+  const quando = (c) => {
+    if (c.tra_giorni === 1) return "domani";
+    const d = new Date(); d.setDate(d.getDate() + c.tra_giorni);
+    return d.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "numeric" });
+  };
+  return `<div class="bday">
+    <div class="bday-ico">🎂</div>
+    <div>${oggi.length ? `<b>Oggi compie gli anni ${oggi.map((c) => h(`${c.nome} ${c.cognome}`)).join(" e ")}!</b>` : "<b>Compleanni in arrivo</b>"}
+      ${poi.length ? `<div class="meta">${oggi.length ? "Prossimi: " : ""}${poi.map((c) => `${h(nomeBreve(c))} ${quando(c)}`).join(" · ")}</div>` : ""}</div>
+  </div>`;
+}
+
 async function tabUscite(main) {
-  const uscite = await api.uscite();
+  const [uscite, compleanni] = await Promise.all([api.uscite(), api.compleanni ? api.compleanni(7).catch(() => []) : []]);
   const lista = uscite.filter((u) => !state.filtroTipo || u.tipo?.id === state.filtroTipo);
-  const chips = `<div class="chips">
+  const chips = cardCompleanni(compleanni) + `<div class="chips">
     <button class="chip" data-f="" aria-pressed="${!state.filtroTipo}">Tutte</button>
     ${state.tipi.map((t) => `<button class="chip" data-f="${t.id}" aria-pressed="${state.filtroTipo === t.id}">${h(t.emoji)} ${h(t.nome)}</button>`).join("")}
   </div>`;

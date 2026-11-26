@@ -142,6 +142,13 @@ export function createApi() {
     async eliminaConvenzione(id) { soloAdmin(); db.convenzioni = db.convenzioni.filter((c) => c.id !== id); save(); },
 
 
+    async compleanni(giorni = 7) {
+      // demo: due compleanni finti, oggi e tra 3 giorni
+      const d = (n) => { const x = new Date(); x.setDate(x.getDate() + n); return x; };
+      return wait([[socio("s2"), 0], [socio("s4"), 3]].filter(([, n]) => n <= giorni)
+        .map(([p, n]) => ({ socio_id: p.id, nome: p.nome, cognome: p.cognome, giorno: d(n).getDate(), mese: d(n).getMonth() + 1, tra_giorni: n })));
+    },
+
     // ----- divise
     divise: () => wait(db.capi.filter((c) => c.attivo !== false)),
     async caricaFoto(blob) {

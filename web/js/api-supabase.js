@@ -75,6 +75,8 @@ export function createApi(cfg) {
     tipiBici: async () => ok(await sb.from("tipi_bici").select("*").order("ordine")),
     luoghi: async () => ok(await sb.from("luoghi").select("*").order("ordine").order("nome")),
 
+    compleanni: async (giorni = 7) => ok(await sb.rpc("compleanni", { p_giorni: giorni })),
+
     // ----- uscite
     async uscite() {
       const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
