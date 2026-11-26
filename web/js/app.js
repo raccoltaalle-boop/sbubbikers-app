@@ -475,6 +475,7 @@ const STATI = {
 const GUIDA_TAGLIE = {
   default: [["XS", "84–88", "70–74"], ["S", "88–92", "74–78"], ["M", "92–96", "78–82"], ["L", "96–102", "82–88"], ["XL", "102–108", "88–94"], ["XXL", "108–114", "94–100"]],
 };
+const MOSTRA_GUIDA_TAGLIE = false; // attivare quando c'è la tabella misure reale del fornitore
 const euro = (n) => n.toLocaleString("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
 // disegno del capo (SVG generato, nessuna foto necessaria per la demo)
@@ -513,7 +514,7 @@ function infoDisponibilita(c) {
     return chiusa ? { txt: "Ordine chiuso", cls: "off" } : { txt: "Su ordinazione", cls: "order" };
   }
   const tot = c.taglie.reduce((a, t) => a + (t.disp || 0), 0);
-  if (!tot) return { txt: "Esaurito", cls: "off" };
+  if (!tot) return { txt: "Su richiesta", cls: "order" };
   return tot <= 3 ? { txt: tot === 1 ? "Ultimo pezzo" : `Ultimi ${tot} pezzi`, cls: "low" } : { txt: "Disponibile subito", cls: "ok" };
 }
 
@@ -536,9 +537,10 @@ async function tabDivise(main) {
 
   if (state.divisa === "catalogo") {
     const gruppi = [["ordine", "Su ordinazione", "Si prenota ora, si ordina tutti insieme al fornitore alla chiusura."],
-      ["magazzino", "Pronti in sede", "Già disponibili: prenoti la taglia e la ritiri."]];
+      ["magazzino", "Pronti in sede", "Già disponibili: prenoti la taglia e la ritiri. Le taglie esaurite si possono richiedere per il prossimo riordino."],
+      ["occasione", "Occasioni", "Capi delle stagioni passate a prezzo ridotto, fino a esaurimento."]];
     body.innerHTML = gruppi.map(([m, tit, sub]) => {
-      const lista = capi.filter((c) => c.modalita === m);
+      const lista = capi.filter((c) => (m === "occasione" ? c.occasione : !c.occasione && c.modalita === m));
       if (!lista.length) return "";
       return `<div class="section-title">${tit}</div><p class="hint" style="margin-top:-2px">${sub}</p>
         <div class="shop-grid">${lista.map((c) => {
@@ -560,7 +562,7 @@ async function tabDivise(main) {
       <div class="totbox"><div><span class="meta">Totale prenotato</span><strong>${euro(tot)}</strong></div>
         <div><span class="meta">Da pagare</span><strong class="${daPagare ? "due" : ""}">${euro(daPagare)}</strong></div></div>
       ${mie.map((p) => {
-        const st = STATI[p.stato];
+        const st = p.stato === "attesa" && p.capo.modalita === "magazzino" && !p.scalato ? { lbl: "Attesa riordino", ico: "⏳", cls: "st-wait" } : STATI[p.stato];
         return `<article class="card booking ${p.stato === "annullata" ? "is-off" : ""}">
           <div class="bk-img">${disegnoCapo(p.capo)}</div>
           <div class="grow"><div class="name">${h(p.capo.nome)}</div>
@@ -587,8 +589,8 @@ async function tabDivise(main) {
 function sheetCapo(c, dopo) {
   const inf = infoDisponibilita(c);
   const chiuso = inf.cls === "off";
-  const sel = { taglia: null, qta: 1 };
-  const guida = c.tipo === "calze" ? "" : `<details class="more"><summary>📏 Guida alle taglie</summary>
+  const sel = { taglia: c.taglie.length === 1 ? c.taglie[0].t : null, qta: 1 };
+  const guida = !MOSTRA_GUIDA_TAGLIE || c.tipo === "calze" ? "" : `<details class="more"><summary>📏 Guida alle taglie</summary>
     <table class="size-table"><thead><tr><th>Taglia</th><th>Torace cm</th><th>Vita cm</th></tr></thead><tbody>
     ${GUIDA_TAGLIE.default.map((r) => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join("")}</tbody></table>
     <p class="hint">Vestibilità aderente: tra due taglie, prendi la più grande. Misure d'esempio.</p></details>`;
@@ -600,37 +602,42 @@ function sheetCapo(c, dopo) {
     <div class="field"><span class="lbl">Taglia</span>
       <div class="sizes">${c.taglie.map((t) => {
         const esaurita = c.modalita === "magazzino" && !t.disp;
-        return `<button type="button" class="size" data-t="${h(t.t)}" ${esaurita || chiuso ? "disabled" : ""} aria-pressed="false">${h(t.t)}
-          ${c.modalita === "magazzino" ? `<small>${esaurita ? "esaurita" : t.disp <= 2 ? `ultim${t.disp === 1 ? "a" : "e"} ${t.disp}` : "disp."}</small>` : ""}</button>`;
+        return `<button type="button" class="size ${esaurita ? "zero" : ""}" data-t="${h(t.t)}" ${chiuso ? "disabled" : ""} aria-pressed="${sel.taglia === t.t}">${h(t.t)}
+          ${c.modalita === "magazzino" ? `<small>${esaurita ? "0 · prenota" : t.disp <= 2 ? `ultim${t.disp === 1 ? "a" : "e"} ${t.disp}` : "disp."}</small>` : ""}</button>`;
       }).join("")}</div>
     </div>
     ${guida}
     <div class="field"><span class="lbl">Quantità</span>
       <div class="stepper"><button type="button" id="q-meno" aria-label="Meno">−</button><span id="q">1</span><button type="button" id="q-piu" aria-label="Più">+</button></div></div>
+    <p class="hint" id="riordino" style="display:none">⏳ Taglia esaurita: la tua prenotazione vale come <b>richiesta per il prossimo riordino</b>. Ti avvisiamo quando arriva.</p>
     <div class="error" id="err"></div>
     <button class="btn accent block" id="b-pren" ${chiuso ? "disabled" : ""}>${chiuso ? inf.txt : "Prenota"}</button>
     <p class="hint" style="text-align:center">Nessun pagamento ora: paghi al ritiro o con bonifico.</p>`, (root) => {
+    const dispSel = () => (c.modalita === "magazzino" && sel.taglia ? c.taglie.find((x) => x.t === sel.taglia).disp || 0 : null);
     const aggiorna = () => {
       root.querySelector("#q").textContent = sel.qta;
       const b = root.querySelector("#b-pren");
-      if (!chiuso) b.textContent = sel.taglia ? `Prenota ${sel.qta} × ${sel.taglia} · ${euro(sel.qta * c.prezzo)}` : "Scegli la taglia";
+      const richiesta = dispSel() === 0;
+      root.querySelector("#riordino").style.display = richiesta ? "" : "none";
+      if (!chiuso) b.textContent = sel.taglia ? `${richiesta ? "Richiedi" : "Prenota"} ${sel.qta} × ${sel.taglia} · ${euro(sel.qta * c.prezzo)}` : "Scegli la taglia";
     };
     root.querySelectorAll(".size").forEach((b) => (b.onclick = () => {
       sel.taglia = b.dataset.t;
       root.querySelectorAll(".size").forEach((x) => x.setAttribute("aria-pressed", x === b));
-      const t = c.taglie.find((x) => x.t === sel.taglia);
-      if (c.modalita === "magazzino" && sel.qta > t.disp) sel.qta = t.disp;
+      const d = dispSel();
+      if (d && sel.qta > d) sel.qta = d;
       aggiorna();
     }));
     root.querySelector("#q-meno").onclick = () => { sel.qta = Math.max(1, sel.qta - 1); aggiorna(); };
     root.querySelector("#q-piu").onclick = () => {
-      const max = c.modalita === "magazzino" && sel.taglia ? c.taglie.find((x) => x.t === sel.taglia).disp : 10;
+      const d = dispSel();
+      const max = d ? d : 10;
       sel.qta = Math.min(max, sel.qta + 1); aggiorna();
     };
     root.querySelector("#b-pren").onclick = async () => {
       if (!sel.taglia) return (root.querySelector("#err").textContent = "Scegli una taglia");
       try {
-        await prova(() => api.prenota(c.id, sel.taglia, sel.qta), "Prenotato! 👕");
+        await prova(() => api.prenota(c.id, sel.taglia, sel.qta), dispSel() === 0 ? "Richiesta registrata ⏳" : "Prenotato! 👕");
         state.divisa = "mie"; closeSheet(); dopo();
       } catch {}
     };
@@ -640,11 +647,12 @@ function sheetCapo(c, dopo) {
 
 async function gestioneDivise(body, capi, dopo) {
   const pren = await api.tuttePrenotazioni();
-  const daOrdinare = capi.filter((c) => c.modalita === "ordine").map((c) => {
-    const righe = pren.filter((p) => p.capo_id === c.id);
+  const daOrdinare = capi.map((c) => {
+    // ordinazione: tutte le prenotazioni; magazzino: solo le richieste di riordino (taglie esaurite)
+    const righe = pren.filter((p) => p.capo_id === c.id && (c.modalita === "ordine" || (p.stato === "attesa" && !p.scalato)));
     const perTaglia = c.taglie.map((t) => [t.t, righe.filter((p) => p.taglia === t.t).reduce((a, p) => a + p.qta, 0)]);
     return { c, perTaglia, tot: perTaglia.reduce((a, [, n]) => a + n, 0) };
-  });
+  }).filter((x) => x.c.modalita === "ordine" || x.tot > 0);
   const incassato = pren.filter((p) => p.pagato).reduce((a, p) => a + p.qta * p.capo.prezzo, 0);
   const daIncassare = pren.filter((p) => !p.pagato).reduce((a, p) => a + p.qta * p.capo.prezzo, 0);
   const testoFornitore = daOrdinare.filter((x) => x.tot).map((x) =>
@@ -656,7 +664,8 @@ async function gestioneDivise(body, capi, dopo) {
 
     <div class="section-title">Riepilogo per il fornitore</div>
     <div class="card">
-      ${daOrdinare.map((x) => `<div class="sum-row"><div class="name">${h(x.c.nome)} <span class="meta">· ${x.tot} pz</span></div>
+      ${daOrdinare.length ? "" : `<p class="meta">Nessun capo da ordinare: qui compaiono gli ordini collettivi e le richieste di riordino delle taglie esaurite.</p>`}
+      ${daOrdinare.map((x) => `<div class="sum-row"><div class="name">${h(x.c.nome)} <span class="meta">· ${x.tot} pz${x.c.modalita === "magazzino" ? " · riordino" : ""}</span></div>
         <div class="sum-sizes">${x.perTaglia.map(([t, n]) => `<span class="${n ? "has" : ""}"><small>${h(t)}</small>${n}</span>`).join("")}</div></div>`).join("")}
       <button class="btn ghost small" id="b-forn" style="margin-top:10px" ${testoFornitore ? "" : "disabled"}>📋 Copia ordine per il fornitore</button>
     </div>
@@ -739,6 +748,7 @@ function sheetEditorCapo(capo, dopo) {
         <div class="seg" id="ed-mod">
           <button type="button" data-v="ordine" aria-pressed="${c.modalita === "ordine"}">Su ordinazione</button>
           <button type="button" data-v="magazzino" aria-pressed="${c.modalita === "magazzino"}">A magazzino</button></div></div>
+      <div class="field"><label class="check"><input type="checkbox" id="ed-occ" ${c.occasione ? "checked" : ""}> In "Occasioni" (capo di stagioni passate)</label></div>
       <div class="field" id="ed-scad-box"><label for="ed-scad">Chiusura ordine <span class="opt">(facolt.)</span></label><input class="input" id="ed-scad" type="date" value="${scadVal}"></div>
       <div class="field"><span class="lbl">Taglie <span class="opt" id="ed-tg-hint"></span></span>
         <div class="chips" style="padding-top:0">${Object.keys(PRESET_TAGLIE).map((k) => `<button type="button" class="chip" data-preset="${h(k)}">${h(k)}</button>`).join("")}</div>
@@ -788,6 +798,7 @@ function sheetEditorCapo(capo, dopo) {
         ...(capo ? { id: capo.id } : {}), nome: $("#ed-nome").value.trim(), tipo: $("#ed-tipo").value, c1: $("#ed-c1").value, c2: $("#ed-c2").value,
         prezzo: Number($("#ed-prezzo").value), descrizione: $("#ed-descr").value.trim() || null, modalita: c.modalita,
         scadenza: c.modalita === "ordine" && sv ? new Date(`${sv}T23:59:00`).toISOString() : null, foto_url: c.foto_url || null, taglie,
+        occasione: $("#ed-occ").checked,
       };
       $("#ed-save").disabled = true;
       try { await prova(() => api.salvaCapo(dati), "Capo salvato"); closeSheet(); dopo(); }

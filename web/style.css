@@ -292,3 +292,7 @@ details.more summary { font-weight: 700; color: var(--accent); cursor: pointer; 
 .bday { display: flex; gap: 12px; align-items: center; background: var(--accent-soft); border-radius: var(--radius); padding: 12px 14px; margin: 4px 0 10px; line-height: 1.35; }
 .bday-ico { font-size: 30px; }
 .bday .meta { margin-top: 2px; color: var(--ink-2); }
+.size.zero { border-style: dashed; color: var(--ink-2); }
+.size.zero small { color: var(--accent); }
+.size.zero[aria-pressed="true"] { color: var(--paper); border-style: solid; }
+.size.zero[aria-pressed="true"] small { color: var(--accent); opacity: 1; }

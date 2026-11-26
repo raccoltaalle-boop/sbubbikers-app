@@ -1,6 +1,6 @@
 // MODALITÀ DEMO: dati finti salvati solo su questo dispositivo.
 // Stessa interfaccia di api-supabase.js. Codice d'invito demo: DEMO2026
-const KEY = "sbb-demo-v3";
+const KEY = "sbb-demo-v4";
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
 
 function giorno(offset, ore, minuti = 0) {
@@ -51,7 +51,7 @@ function seed() {
       descrizione: "Manica corta, tessuto traspirante, zip intera, 3 tasche posteriori. Nuova grafica 2027.", taglie: T([["XS",null],["S",null],["M",null],["L",null],["XL",null],["XXL",null]]) },
     { id: "c2", nome: "Salopette pro", tipo: "salopette", c1: "#14171c", c2: "#ff5a1f", prezzo: 85, modalita: "ordine", scadenza: chiusura.toISOString(),
       descrizione: "Fondello 3D per lunghe distanze, bretelle in rete.", taglie: T([["S",null],["M",null],["L",null],["XL",null],["XXL",null]]) },
-    { id: "c3", nome: "Smanicato antivento", tipo: "smanicato", c1: "#14171c", c2: "#ffffff", prezzo: 45, modalita: "magazzino",
+    { id: "c3", nome: "Smanicato antivento 24-25", tipo: "smanicato", c1: "#14171c", c2: "#ffffff", prezzo: 20, modalita: "magazzino", occasione: true,
       descrizione: "Leggero, si piega in tasca. Retro in rete traspirante.", taglie: T([["S",0],["M",1],["L",0],["XL",0]]) },
     { id: "c4", nome: "Giacca invernale", tipo: "giacca", c1: "#1e2a44", c2: "#ff5a1f", prezzo: 110, modalita: "magazzino",
       descrizione: "Termica, antivento davanti, felpata dentro. Per uscite da 0 a 10 °C.", taglie: T([["S",2],["M",4],["L",3],["XL",1],["XXL",0]]) },
@@ -62,9 +62,9 @@ function seed() {
     { id: "p1", capo_id: "c1", socio_id: "s2", taglia: "M", qta: 1, stato: "attesa", pagato: false, created_at: giorno(-2, 10) },
     { id: "p2", capo_id: "c1", socio_id: "s3", taglia: "S", qta: 1, stato: "attesa", pagato: true, created_at: giorno(-1, 9) },
     { id: "p3", capo_id: "c2", socio_id: "s3", taglia: "S", qta: 1, stato: "attesa", pagato: true, created_at: giorno(-1, 9) },
-    { id: "p4", capo_id: "c4", socio_id: "s4", taglia: "L", qta: 1, stato: "pronta", pagato: false, created_at: giorno(-5, 18) },
+    { id: "p4", capo_id: "c4", socio_id: "s4", taglia: "L", qta: 1, stato: "pronta", scalato: true, pagato: false, created_at: giorno(-5, 18) },
     { id: "p5", capo_id: "c1", socio_id: "s4", taglia: "L", qta: 2, stato: "attesa", pagato: false, created_at: giorno(-3, 21) },
-    { id: "p6", capo_id: "c5", socio_id: "s1", taglia: "40-43", qta: 2, stato: "consegnata", pagato: true, created_at: giorno(-9, 12) },
+    { id: "p6", capo_id: "c5", socio_id: "s1", taglia: "40-43", qta: 2, stato: "consegnata", scalato: true, pagato: true, created_at: giorno(-9, 12) },
   ];
   return { soci, tipi, luoghi, uscite, avvisi, convenzioni, capi, prenotazioni, me: null };
 }
@@ -160,18 +160,20 @@ export function createApi() {
     },
     async prenota(capoId, taglia, qta) {
       const c = db.capi.find((x) => x.id === capoId), t = c.taglie.find((x) => x.t === taglia);
+      let stato = "attesa", scalato = false;
       if (c.modalita === "magazzino") {
-        if ((t.disp ?? 0) < qta) throw new Error(`Taglia ${taglia}: ne restano solo ${t.disp ?? 0}`);
-        t.disp -= qta;
+        const d = t.disp ?? 0;
+        if (d >= qta) { t.disp -= qta; stato = "confermata"; scalato = true; }
+        else if (d > 0) throw new Error(`Taglia ${taglia}: disponibili solo ${d} pezzi`);
       } else if (c.scadenza && new Date(c.scadenza) < new Date()) throw new Error("Ordine chiuso");
-      db.prenotazioni.push({ id: uid(), capo_id: capoId, socio_id: db.me, taglia, qta, stato: c.modalita === "magazzino" ? "confermata" : "attesa", pagato: false, created_at: new Date().toISOString() });
+      db.prenotazioni.push({ id: uid(), capo_id: capoId, socio_id: db.me, taglia, qta, stato, scalato, pagato: false, created_at: new Date().toISOString() });
       save();
     },
     async annullaPrenotazione(id) {
       const p = db.prenotazioni.find((x) => x.id === id);
       if (p.socio_id !== db.me && meObj()?.ruolo !== "admin") throw new Error("Permesso negato");
       const c = db.capi.find((x) => x.id === p.capo_id);
-      if (c.modalita === "magazzino") c.taglie.find((x) => x.t === p.taglia).disp += p.qta;
+      if (p.scalato && p.stato !== "consegnata") c.taglie.find((x) => x.t === p.taglia).disp += p.qta;
       p.stato = "annullata"; save();
     },
     async tuttePrenotazioni() {
