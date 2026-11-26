@@ -175,13 +175,19 @@ export function createApi() {
       if (p.stato === "consegnata" && meObj()?.ruolo !== "admin") throw new Error("Capo già consegnato: contatta un admin");
       const c = db.capi.find((x) => x.id === p.capo_id);
       if (p.scalato && p.stato !== "consegnata") c.taglie.find((x) => x.t === p.taglia).disp += p.qta;
-      p.stato = "annullata"; save();
+      p.stato = "annullata"; p.annullata_at = new Date().toISOString(); p.annullata_da = db.me; save();
     },
     async tuttePrenotazioni() {
       soloAdmin();
       return wait(db.prenotazioni.filter((p) => p.stato !== "annullata").sort((a, b) => b.created_at.localeCompare(a.created_at))
         .map((p) => ({ ...p, capo: db.capi.find((c) => c.id === p.capo_id), socio: socio(p.socio_id) })));
     },
+    async annullate() {
+      soloAdmin();
+      return wait(db.prenotazioni.filter((p) => p.stato === "annullata").sort((a, b) => (b.annullata_at || "").localeCompare(a.annullata_at || ""))
+        .map((p) => ({ ...p, capo: db.capi.find((c) => c.id === p.capo_id), socio: socio(p.socio_id), annullatore: socio(p.annullata_da) })));
+    },
+    async eliminaPrenotazione(id) { soloAdmin(); db.prenotazioni = db.prenotazioni.filter((p) => !(p.id === id && p.stato === "annullata")); save(); },
     async aggiornaPrenotazione(id, patch) { soloAdmin(); Object.assign(db.prenotazioni.find((x) => x.id === id), patch); save(); },
     async salvaCapo(c) {
       soloAdmin();

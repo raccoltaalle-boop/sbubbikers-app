@@ -520,13 +520,13 @@ function infoDisponibilita(c) {
 
 async function tabDivise(main) {
   state.divisa = state.divisa || "catalogo";
-  const [capi, mie] = await Promise.all([api.divise(), api.miePrenotazioni()]);
+  const [capi, mie, annullate] = await Promise.all([api.divise(), api.miePrenotazioni(), isAdmin() && api.annullate ? api.annullate().catch(() => []) : []]);
   const attive = mie.filter((p) => !["consegnata", "annullata"].includes(p.stato)).length;
   const ordineAperto = capi.filter((c) => c.modalita === "ordine" && c.scadenza && new Date(c.scadenza) > new Date())
     .sort((a, b) => a.scadenza.localeCompare(b.scadenza))[0];
   const giorni = ordineAperto ? Math.ceil((new Date(ordineAperto.scadenza) - new Date()) / 864e5) : 0;
 
-  const seg = [["catalogo", "Catalogo"], ["mie", `Le mie${attive ? ` · ${attive}` : ""}`], ...(isAdmin() ? [["gestione", "Gestione"]] : [])];
+  const seg = [["catalogo", "Catalogo"], ["mie", `Le mie${attive ? ` · ${attive}` : ""}`], ...(isAdmin() ? [["gestione", `Gestione${annullate.length ? ` ⚠️${annullate.length}` : ""}`]] : [])];
   main.innerHTML = `
     ${ordineAperto ? `<div class="order-banner"><div class="ob-num">${giorni}</div>
       <div><b>Ordine collettivo aperto</b><br><span>${giorni === 1 ? "giorno" : "giorni"} alla chiusura · ${new Date(ordineAperto.scadenza).toLocaleDateString("it-IT", { day: "numeric", month: "long" })}</span></div></div>` : ""}
@@ -585,7 +585,7 @@ async function tabDivise(main) {
     }));
   }
 
-  if (state.divisa === "gestione") await gestioneDivise(body, capi, () => tabDivise(main));
+  if (state.divisa === "gestione") await gestioneDivise(body, capi, () => tabDivise(main), annullate);
 }
 
 function sheetCapo(c, dopo) {
@@ -647,7 +647,9 @@ function sheetCapo(c, dopo) {
   });
 }
 
-async function gestioneDivise(body, capi, dopo) {
+const fmtDataOra = (d) => new Date(d).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+async function gestioneDivise(body, capi, dopo, annullate = []) {
   const pren = await api.tuttePrenotazioni();
   const daOrdinare = capi.map((c) => {
     // ordinazione: tutte le prenotazioni; magazzino: solo le richieste di riordino (taglie esaurite)
@@ -660,7 +662,23 @@ async function gestioneDivise(body, capi, dopo) {
   const testoFornitore = daOrdinare.filter((x) => x.tot).map((x) =>
     `${x.c.nome}: ${x.perTaglia.filter(([, n]) => n).map(([t, n]) => `${n}×${t}`).join(", ")} (tot ${x.tot})`).join("\n");
 
-  body.innerHTML = `
+  const boxAnnullate = annullate.length ? `
+    <div class="section-title">⚠️ Annullate · ${annullate.length}</div>
+    <div class="card annul">
+      <p class="hint" style="margin-top:0">Restano qui finché non le elimini, così non perdi nessun annullamento. I pezzi a magazzino sono già tornati disponibili.</p>
+      ${annullate.map((p) => {
+        const chi = p.annullatore ? (p.annullata_da === p.socio_id ? "dal socio" : `da ${h(p.annullatore.nome)} ${h(p.annullatore.cognome)}${p.annullatore.ruolo === "admin" ? " (admin)" : ""}`) : "";
+        return `<div class="list-item" style="align-items:flex-start">
+          <span class="avatar" style="margin:0;background:var(--muted)">${h(iniziali(p.socio))}</span>
+          <div class="grow"><div class="name">${h(p.socio?.nome)} ${h(p.socio?.cognome)}</div>
+            <div class="meta">${h(p.capo.nome)} · <b>${h(p.taglia)}</b> × ${p.qta} · ${euro(p.qta * p.capo.prezzo)}${p.pagato ? " · <b>era pagato: da rimborsare</b>" : ""}</div>
+            <div class="meta">Annullata ${p.annullata_at ? fmtDataOra(p.annullata_at) : ""} ${chi}</div></div>
+          <button class="btn ghost small" data-elim="${h(p.id)}" aria-label="Elimina">✕</button>
+        </div>`;
+      }).join("")}
+      ${annullate.length > 1 ? `<button class="btn danger small" id="b-elim-tutte" style="margin-top:10px">Elimina tutte (${annullate.length})</button>` : ""}
+    </div>` : "";
+  body.innerHTML = boxAnnullate + `
     <div class="totbox"><div><span class="meta">Incassato</span><strong>${euro(incassato)}</strong></div>
       <div><span class="meta">Da incassare</span><strong class="${daIncassare ? "due" : ""}">${euro(daIncassare)}</strong></div></div>
 
@@ -681,6 +699,7 @@ async function gestioneDivise(body, capi, dopo) {
           <div class="row-actions" style="margin-top:6px">
             <select class="mini-select" data-stato="${h(p.id)}">${["attesa", "confermata", "pronta", "consegnata"].map((s) => `<option value="${s}" ${p.stato === s ? "selected" : ""}>${STATI[s].ico} ${STATI[s].lbl}</option>`).join("")}</select>
             <button class="status ${p.pagato ? "st-ok" : "st-wait"} as-btn" data-pag="${h(p.id)}">${p.pagato ? "€ Pagato" : "€ Segna pagato"}</button>
+            <button class="link-btn" data-annadm="${h(p.id)}">Annulla</button>
           </div></div>
       </div>`).join("") || `<p class="meta">Nessuna prenotazione.</p>`}</div>
 
@@ -700,6 +719,20 @@ async function gestioneDivise(body, capi, dopo) {
   body.querySelectorAll("[data-stato]").forEach((s) => (s.onchange = async () => {
     await prova(() => api.aggiornaPrenotazione(s.dataset.stato, { stato: s.value }), "Stato aggiornato"); dopo();
   }));
+  body.querySelectorAll("[data-annadm]").forEach((b) => (b.onclick = async () => {
+    const p = pren.find((x) => x.id === b.dataset.annadm);
+    if (!(await dialogo({ testo: `Annullare la prenotazione di ${p.socio?.nome} ${p.socio?.cognome} (${p.capo.nome} ${p.taglia} × ${p.qta})?${p.scalato && p.stato !== "consegnata" ? " I pezzi tornano a magazzino." : ""}`, ok: "Annulla prenotazione", pericolo: true }))) return;
+    await prova(() => api.annullaPrenotazione(p.id), "Prenotazione annullata"); dopo();
+  }));
+  body.querySelectorAll("[data-elim]").forEach((b) => (b.onclick = async () => {
+    if (!(await dialogo({ testo: "Eliminare definitivamente questo annullamento dall'elenco?", ok: "Elimina", pericolo: true }))) return;
+    await prova(() => api.eliminaPrenotazione(b.dataset.elim), "Eliminata"); dopo();
+  }));
+  const bt = body.querySelector("#b-elim-tutte");
+  if (bt) bt.onclick = async () => {
+    if (!(await dialogo({ testo: `Eliminare definitivamente tutte le ${annullate.length} prenotazioni annullate?`, ok: "Elimina tutte", pericolo: true }))) return;
+    await prova(async () => { for (const p of annullate) await api.eliminaPrenotazione(p.id); }, "Elenco svuotato"); dopo();
+  };
   body.querySelectorAll("[data-pag]").forEach((b) => (b.onclick = async () => {
     const p = pren.find((x) => x.id === b.dataset.pag);
     await prova(() => api.aggiornaPrenotazione(p.id, { pagato: !p.pagato }), p.pagato ? "Segnato da pagare" : "Pagamento registrato"); dopo();

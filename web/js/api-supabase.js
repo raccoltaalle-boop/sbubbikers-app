@@ -134,9 +134,16 @@ export function createApi(cfg) {
     prenota: async (capoId, taglia, qta) => ok(await sb.rpc("prenota_capo", { p_capo: capoId, p_taglia: taglia, p_qta: qta })),
     annullaPrenotazione: async (id) => ok(await sb.rpc("annulla_prenotazione", { p_id: id })),
     async tuttePrenotazioni() {
-      const rows = ok(await sb.from("prenotazioni").select("*,capo:capi(*),socio:soci(nome,cognome)").neq("stato", "annullata").order("created_at", { ascending: false }));
+      const rows = ok(await sb.from("prenotazioni").select("*,capo:capi(*),socio:soci!prenotazioni_socio_id_fkey(nome,cognome)").neq("stato", "annullata").order("created_at", { ascending: false }));
       return rows.map((p) => ({ ...p, capo: { ...p.capo, prezzo: Number(p.capo.prezzo) } }));
     },
+    async annullate() {
+      const rows = ok(await sb.from("prenotazioni")
+        .select("*,capo:capi(*),socio:soci!prenotazioni_socio_id_fkey(nome,cognome),annullatore:soci!prenotazioni_annullata_da_fkey(nome,cognome,ruolo)")
+        .eq("stato", "annullata").order("annullata_at", { ascending: false, nullsFirst: false }).limit(200));
+      return rows.map((p) => ({ ...p, capo: { ...p.capo, prezzo: Number(p.capo.prezzo) } }));
+    },
+    eliminaPrenotazione: async (id) => ok(await sb.from("prenotazioni").delete().eq("id", id).eq("stato", "annullata")),
     aggiornaPrenotazione: async (id, patch) => ok(await sb.from("prenotazioni").update(patch).eq("id", id)),
     async salvaCapo({ taglie, id, ...dati }) {
       const capo = id

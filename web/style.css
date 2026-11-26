@@ -296,3 +296,4 @@ details.more summary { font-weight: 700; color: var(--accent); cursor: pointer; 
 .size.zero small { color: var(--accent); }
 .size.zero[aria-pressed="true"] { color: var(--paper); border-style: solid; }
 .size.zero[aria-pressed="true"] small { color: var(--accent); opacity: 1; }
+.card.annul { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 45%, var(--card)); }
