@@ -13,7 +13,7 @@
 //   TELEGRAM_THREAD_ID   (facoltativo) id del topic, se si pubblica in un gruppo con topic
 //   (il segreto tra database e bot NON va inserito: lo legge dal Vault con public.webhook_secret())
 //   APP_URL              es. https://app.sbubbikers.com
-//  SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY sono già disponibili in automatico.
+//  SUPABASE_URL e la chiave di servizio (SUPABASE_SECRET_KEYS) sono già disponibili in automatico.
 // =====================================================================
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -24,7 +24,12 @@ let SECRET = Deno.env.get("WEBHOOK_SECRET") ?? ""; // facoltativo: di norma lett
 const APP_URL = (Deno.env.get("APP_URL") ?? "https://app.sbubbikers.com").replace(/\/$/, "");
 const TZ = "Europe/Rome";
 
-const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+// chiave di servizio: quella nuova (SUPABASE_SECRET_KEYS) se presente, altrimenti la legacy
+function chiaveServizio() {
+  try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default; if (k) return k; } catch { /* ignora */ }
+  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+}
+const sb = createClient(Deno.env.get("SUPABASE_URL")!, chiaveServizio(), { auth: { persistSession: false } });
 
 const USCITA_SELECT =
   "id,socio_id,data_ora,km,dislivello,andatura,note,link_percorso,annullata,tg_message_id," +
