@@ -874,7 +874,7 @@ async function tabGare(main) {
   const conSquadra = gare.filter((g) => g.adesioni.some((a) => a.stato === "vado"));
   const seg = `<div class="seg" style="margin-bottom:8px">
     <button data-gv="calendario" aria-pressed="${state.gVista === "calendario"}">Calendario</button>
-    <button data-gv="squadra" aria-pressed="${state.gVista === "squadra"}">🙋 La squadra va${conSquadra.length ? ` · ${conSquadra.length}` : ""}</button></div>`;
+    <button data-gv="squadra" aria-pressed="${state.gVista === "squadra"}">🙋 Chi partecipa?${conSquadra.length ? ` · ${conSquadra.length}` : ""}</button></div>`;
   if (state.gVista === "squadra") return vistaSquadra(main, gare, conSquadra, seg);
   const conta = (c) => gare.filter((g) => g.categoria === c).length;
   const perCat = gare.filter((g) => !state.gCat || g.categoria === state.gCat);
