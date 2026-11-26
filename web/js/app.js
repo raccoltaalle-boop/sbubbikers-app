@@ -534,7 +534,7 @@ async function tabDivise(main) {
               <div class="prod-row"><span class="prod-price">${euro(c.prezzo)}</span><span class="avail ${inf.cls}">${inf.txt}</span></div></div>
           </button>`;
         }).join("")}</div>`;
-    }).join("");
+    }).join("") || `<div class="empty"><div class="big">👕</div><p>Il catalogo è ancora vuoto.${isAdmin() ? "<br>Aggiungi il primo capo da <b>Gestione</b>." : ""}</p></div>`;
     body.querySelectorAll("[data-capo]").forEach((b) => (b.onclick = () => sheetCapo(capi.find((c) => c.id === b.dataset.capo), () => tabDivise(main))));
   }
 
