@@ -11,7 +11,7 @@
 //   TELEGRAM_BOT_TOKEN   token da @BotFather
 //   TELEGRAM_CHAT_ID     id del canale, es. -1001234567890 (o @nomecanale se pubblico)
 //   TELEGRAM_THREAD_ID   (facoltativo) id del topic, se si pubblica in un gruppo con topic
-//   WEBHOOK_SECRET       una password lunga inventata da te, uguale a quella nei trigger
+//   (il segreto tra database e bot NON va inserito: lo legge dal Vault con public.webhook_secret())
 //   APP_URL              es. https://app.sbubbikers.com
 //  SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY sono già disponibili in automatico.
 // =====================================================================
@@ -20,7 +20,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const CHAT = Deno.env.get("TELEGRAM_CHAT_ID") ?? "";
 const THREAD = Deno.env.get("TELEGRAM_THREAD_ID");
-const SECRET = Deno.env.get("WEBHOOK_SECRET") ?? "";
+let SECRET = Deno.env.get("WEBHOOK_SECRET") ?? ""; // facoltativo: di norma letto dal Vault
 const APP_URL = (Deno.env.get("APP_URL") ?? "https://app.sbubbikers.com").replace(/\/$/, "");
 const TZ = "Europe/Rome";
 
@@ -174,13 +174,33 @@ async function weekend() {
 }
 
 // ---------- ENTRY POINT ----------------------------------------------------
+async function segreto() {
+  if (!SECRET) {
+    const { data, error } = await sb.rpc("webhook_secret");
+    if (error) console.error("webhook_secret", error);
+    SECRET = typeof data === "string" ? data : "";
+  }
+  return SECRET;
+}
+
 Deno.serve(async (req) => {
-  if (!SECRET || req.headers.get("x-webhook-secret") !== SECRET) return new Response("forbidden", { status: 401 });
+  const s = await segreto();
+  if (!s || req.headers.get("x-webhook-secret") !== s) return new Response("forbidden", { status: 401 });
   const p = await req.json().catch(() => ({}));
 
   try {
     if (p.azione === "promemoria") return Response.json(await promemoria());
     if (p.azione === "weekend") return Response.json(await weekend());
+    if (p.azione === "chat") {
+      // elenca canali e gruppi dove il bot è stato aggiunto (per trovare TELEGRAM_CHAT_ID)
+      const r = await tg("getUpdates", { allowed_updates: ["my_chat_member", "channel_post", "message"] });
+      const chat = new Map();
+      for (const u of r.result ?? []) {
+        const c = u.my_chat_member?.chat ?? u.channel_post?.chat ?? u.message?.chat;
+        if (c && c.type !== "private") chat.set(c.id, { id: c.id, titolo: c.title, tipo: c.type });
+      }
+      return Response.json({ chat: [...chat.values()] });
+    }
     if (p.azione === "test") return Response.json(await tg("sendMessage", { ...destinazione(), text: "✅ Bot SBUBBIKERS collegato!" }));
 
     const { type, table, record, old_record } = p;
