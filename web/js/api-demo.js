@@ -1,6 +1,6 @@
 // MODALITÀ DEMO: dati finti salvati solo su questo dispositivo.
 // Stessa interfaccia di api-supabase.js. Codice d'invito demo: DEMO2026
-const KEY = "sbb-demo-v2";
+const KEY = "sbb-demo-v3";
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
 
 function giorno(offset, ore, minuti = 0) {
@@ -19,8 +19,7 @@ function seed() {
   const tipi = [
     { id: 1, nome: "Strada", emoji: "🚴", ordine: 1 },
     { id: 2, nome: "Gravel", emoji: "🪨", ordine: 2 },
-    { id: 3, nome: "MTB", emoji: "🚵", ordine: 3 },
-    { id: 4, nome: "E-bike", emoji: "⚡", ordine: 4 },
+    { id: 3, nome: "MTB / E-bike", emoji: "🚵", ordine: 3 },
   ];
   const luoghi = [
     { id: 1, nome: "Piazzale Kennedy – Rimini", link_mappa: "https://maps.google.com/?q=Piazzale+Kennedy+Rimini", ordine: 1 },

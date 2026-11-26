@@ -394,8 +394,7 @@ grant execute on function public.ping() to anon, authenticated;
 insert into public.tipi_bici (nome, emoji, ordine) values
   ('Strada', '🚴', 1),
   ('Gravel', '🪨', 2),
-  ('MTB',    '🚵', 3),
-  ('E-bike', '⚡', 4)
+  ('MTB / E-bike', '🚵', 3)
 on conflict (nome) do nothing;
 
 -- ESEMPI: sostituire con i vostri luoghi abituali
