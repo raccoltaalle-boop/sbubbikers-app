@@ -385,6 +385,10 @@ begin
   end if;
 end $$;
 
+-- Funzione pubblica per il controllo "tieni sveglio" del workflow GitHub (non legge dati)
+create or replace function public.ping() returns int language sql stable as $$ select 1 $$;
+grant execute on function public.ping() to anon, authenticated;
+
 -- ---------- DATI INIZIALI (modificabili) --------------------------------
 
 insert into public.tipi_bici (nome, emoji, ordine) values
