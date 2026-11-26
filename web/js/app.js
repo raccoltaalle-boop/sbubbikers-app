@@ -864,7 +864,8 @@ async function tabAltro(main) {
 // ---------- GARE -----------------------------------------------------
 const CAT_GARE = { strada: { lbl: "Strada", ico: "🚴" }, mtb: { lbl: "MTB", ico: "🚵" }, gravel: { lbl: "Gravel", ico: "🪨" } };
 const TIPI_GARA = { strada: ["Granfondo", "Mediofondo", "Cronometro", "Circuito", "Cicloturistica"], mtb: ["XC", "Marathon", "Granfondo MTB", "Enduro", "Ciclocross", "Cicloturistica"], gravel: ["Gravel", "Gravel race", "Cicloturistica"] };
-const REGIONI = ["Abruzzo", "Basilicata", "Calabria", "Campania", "Emilia-Romagna", "Friuli-Venezia Giulia", "Lazio", "Liguria", "Lombardia", "Marche", "Molise", "Piemonte", "Puglia", "Sardegna", "Sicilia", "Toscana", "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto", "San Marino", "Estero"];
+const REGIONE_CASA = "Emilia-Romagna";
+const REGIONI = ["Emilia-Romagna", "Abruzzo", "Basilicata", "Calabria", "Campania", "Friuli-Venezia Giulia", "Lazio", "Liguria", "Lombardia", "Marche", "Molise", "Piemonte", "Puglia", "Sardegna", "Sicilia", "Toscana", "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto", "San Marino", "Estero"];
 const nomeSito = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return "fonte"; } };
 
 async function tabGare(main) {
@@ -872,7 +873,9 @@ async function tabGare(main) {
   state.gCat = state.gCat || null; state.gReg = state.gReg || null;
   const conta = (c) => gare.filter((g) => g.categoria === c).length;
   const perCat = gare.filter((g) => !state.gCat || g.categoria === state.gCat);
-  const regioni = [...new Set(perCat.map((g) => g.regione).filter(Boolean))].sort();
+  // Emilia-Romagna sempre per prima (anche senza gare), poi le altre regioni presenti in ordine alfabetico
+  const regioni = [REGIONE_CASA, ...[...new Set(perCat.map((g) => g.regione).filter(Boolean))].filter((r) => r !== REGIONE_CASA).sort()];
+  const perReg = (r) => perCat.filter((g) => g.regione === r).length;
   if (state.gReg && !regioni.includes(state.gReg)) state.gReg = null;
   const lista = perCat.filter((g) => !state.gReg || g.regione === state.gReg);
 
@@ -880,12 +883,13 @@ async function tabGare(main) {
       <button class="chip" data-gc="" aria-pressed="${!state.gCat}">Tutte</button>
       ${Object.entries(CAT_GARE).map(([k, c]) => `<button class="chip" data-gc="${k}" aria-pressed="${state.gCat === k}">${c.ico} ${c.lbl}${conta(k) ? ` <small>· ${conta(k)}</small>` : ""}</button>`).join("")}
     </div>
-    ${regioni.length > 1 ? `<div class="chips" style="padding-top:0">
-      <button class="chip" data-gr="" aria-pressed="${!state.gReg}">Tutta Italia</button>
-      ${regioni.map((r) => `<button class="chip" data-gr="${h(r)}" aria-pressed="${state.gReg === r}">${h(r)}</button>`).join("")}</div>` : ""}`;
+    <div class="chips" style="padding-top:0">
+      ${regioni.map((r) => `<button class="chip" data-gr="${h(r)}" aria-pressed="${state.gReg === r}">${h(r)} <small>· ${perReg(r)}</small></button>`).join("")}
+      <button class="chip" data-gr="" aria-pressed="${!state.gReg}">Tutta Italia <small>· ${perCat.length}</small></button></div>`;
 
   if (!lista.length) {
-    html += `<div class="empty"><div class="big">🏁</div><p><b>Nessuna gara in calendario${state.gCat ? " per questa categoria" : ""}.</b>${isAdmin() ? "<br>Aggiungila con il pulsante + Gara." : ""}</p></div>`;
+    const dove = [state.gCat && `di ${CAT_GARE[state.gCat].lbl}`, state.gReg && `in ${state.gReg}`].filter(Boolean).join(" ");
+    html += `<div class="empty"><div class="big">🏁</div><p><b>Nessuna gara ${dove} in calendario.</b>${isAdmin() ? "<br>Aggiungila con il pulsante + Gara." : ""}</p></div>`;
   } else {
     let mese = null;
     for (const g of lista) {
