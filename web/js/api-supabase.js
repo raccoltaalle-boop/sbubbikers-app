@@ -177,6 +177,11 @@ export function createApi(cfg) {
       return sb.storage.from("divise").getPublicUrl(nome).data.publicUrl;
     },
 
+    // ----- accessi (superadmin)
+    registraAccesso: async () => ok(await sb.rpc("registra_accesso")),
+    riepilogoAccessi: async () => ok(await sb.rpc("riepilogo_accessi")),
+    accessiSocio: async (id) => ok(await sb.from("accessi").select("at,dispositivo").eq("socio_id", id).order("at", { ascending: false }).limit(40)),
+
     // ----- admin
     async soci() {
       const rows = ok(await sb.from("soci").select("id,nome,cognome,ruolo,attivo,inviti(codice),dispositivi(user_id)").order("cognome"));

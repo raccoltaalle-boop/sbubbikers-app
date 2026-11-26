@@ -43,7 +43,10 @@ const ls = {
   del: (k) => { try { localStorage.removeItem(k); } catch {} },
 };
 const linkInvito = (codice) => `${(cfg.APP_URL || location.origin).replace(/\/$/, "")}/?i=${codice}`;
-const isAdmin = () => api.me?.ruolo === "admin";
+const isAdmin = () => ["admin", "superadmin"].includes(api.me?.ruolo);
+const isSuper = () => api.me?.ruolo === "superadmin";
+const TAG_RUOLO = { admin: '<span class="tag admin">admin</span>', superadmin: '<span class="tag super">superadmin</span>' };
+const registraAccesso = () => { try { api.registraAccesso?.().catch(() => {}); } catch {} };
 
 // ---------- avvio -----------------------------------------------------
 async function start() {
@@ -56,6 +59,7 @@ async function start() {
 
   let me = null;
   try { me = await api.init(); } catch (e) { console.error(e); }
+  if (me) registraAccesso();
 
   // link d'invito aperto su un dispositivo non ancora collegato
   if (!me && codiceUrl) {
@@ -97,6 +101,7 @@ function renderLogin(codice) {
       const me = await api.riscatta(c);
       if (!me) throw new Error("Accesso non riuscito");
       ls.set("sbb-codice", c);
+      registraAccesso();
       history.replaceState(null, "", location.pathname + (state.focusUscita ? `?u=${state.focusUscita}` : ""));
       await caricaBase();
       renderBenvenuto(me, c);
@@ -131,12 +136,15 @@ const TABS = [
   { id: "divise", ico: "👕", lbl: "Divise", titolo: "Divise", serve: "divise" },
   { id: "altro", ico: "👤", lbl: "Altro", titolo: "Profilo" },
 ];
-const ALTRO = [["profilo", "Profilo"], ["sconti", "Convenzioni"]];
+const ALTRO_BASE = [["profilo", "Profilo"], ["sconti", "Convenzioni"]];
+let ALTRO = ALTRO_BASE;
 
 function renderShell() {
   // vecchi indirizzi (?tab=profilo / ?tab=convenzioni) finiscono in "Altro"
   if (state.tab === "profilo" || state.tab === "convenzioni") { state.altro = state.tab === "profilo" ? "profilo" : "sconti"; state.tab = "altro"; }
   state.altro = state.altro || "profilo";
+  ALTRO = isSuper() ? [...ALTRO_BASE, ["accessi", "Accessi"]] : ALTRO_BASE;
+  if (!ALTRO.some(([k]) => k === state.altro)) state.altro = "profilo";
   const tabs = TABS.filter((x) => !x.serve || typeof api[x.serve] === "function");
   if (!tabs.some((t) => t.id === state.tab)) state.tab = "uscite";
   const t = { ...tabs.find((x) => x.id === state.tab) };
@@ -678,7 +686,7 @@ async function gestioneDivise(body, capi, dopo, annullate = []) {
     <div class="card annul">
       <p class="hint" style="margin-top:0">Restano qui finché non le elimini, così non perdi nessun annullamento. I pezzi a magazzino sono già tornati disponibili.</p>
       ${annullate.map((p) => {
-        const chi = p.annullatore ? (p.annullata_da === p.socio_id ? "dal socio" : `da ${h(p.annullatore.nome)} ${h(p.annullatore.cognome)}${p.annullatore.ruolo === "admin" ? " (admin)" : ""}`) : "";
+        const chi = p.annullatore ? (p.annullata_da === p.socio_id ? "dal socio" : `da ${h(p.annullatore.nome)} ${h(p.annullatore.cognome)}${["admin", "superadmin"].includes(p.annullatore.ruolo) ? " (admin)" : ""}`) : "";
         return `<div class="list-item" style="align-items:flex-start">
           <span class="avatar" style="margin:0;background:var(--muted)">${h(iniziali(p.socio))}</span>
           <div class="grow"><div class="name">${h(p.socio?.nome)} ${h(p.socio?.cognome)}</div>
@@ -863,7 +871,75 @@ async function tabAltro(main) {
   main.innerHTML = `<div class="seg" style="margin-bottom:8px">${ALTRO.map(([k, l]) => `<button data-altro="${k}" aria-pressed="${state.altro === k}">${l}</button>`).join("")}</div><div id="altro-body"></div>`;
   main.querySelectorAll("[data-altro]").forEach((b) => (b.onclick = () => { state.altro = b.dataset.altro; window.scrollTo(0, 0); renderShell(); }));
   const body = main.querySelector("#altro-body");
-  await (state.altro === "sconti" ? tabConvenzioni(body) : tabProfilo(body));
+  await (state.altro === "sconti" ? tabConvenzioni(body) : state.altro === "accessi" ? tabAccessi(body) : tabProfilo(body));
+}
+
+// ---------- ACCESSI (solo superadmin) ----------------------------------
+function quando(d) {
+  if (!d) return null;
+  const x = new Date(d), oggi = new Date(), ieri = new Date(); ieri.setDate(oggi.getDate() - 1);
+  const ora = x.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  if (x.toDateString() === oggi.toDateString()) return `oggi ${ora}`;
+  if (x.toDateString() === ieri.toDateString()) return `ieri ${ora}`;
+  const giorni = Math.floor((oggi - x) / 864e5);
+  return giorni < 7 ? `${giorni} giorni fa` : x.toLocaleDateString("it-IT", { day: "numeric", month: "short", year: giorni > 300 ? "numeric" : undefined });
+}
+
+async function tabAccessi(main) {
+  const righe = await api.riepilogoAccessi();
+  const stato = (r) => r.accessi_7g > 0 ? "attivo" : r.ultimo_accesso ? (r.accessi_30g > 0 ? "recente" : "inattivo") : r.n_dispositivi > 0 ? "collegato" : "mai";
+  const conta = (st) => righe.filter((r) => stato(r) === st).length;
+  state.accF = state.accF || "tutti"; state.accQ = state.accQ || "";
+  const filtri = [["tutti", "Tutti", righe.length], ["attivo", "Attivi 7 gg", conta("attivo")], ["inattivo", "Inattivi 30+ gg", conta("inattivo")], ["mai", "Mai entrati", conta("mai")]];
+  const ord = { attivo: 0, recente: 1, collegato: 2, inattivo: 3, mai: 4 };
+  const draw = () => {
+    const q = state.accQ.toLowerCase();
+    const lista = righe.filter((r) => (state.accF === "tutti" || stato(r) === state.accF) && (!q || `${r.nome} ${r.cognome}`.toLowerCase().includes(q)))
+      .sort((a, b) => ord[stato(a)] - ord[stato(b)] || (b.ultimo_accesso || "").localeCompare(a.ultimo_accesso || "") || a.cognome.localeCompare(b.cognome));
+    main.querySelector("#acc-list").innerHTML = lista.map((r) => {
+      const st = stato(r);
+      const sotto = st === "mai" ? "⏳ Mai entrato: invito non ancora usato"
+        : st === "collegato" ? `📱 Collegato (${r.n_dispositivi} disp.), nessun accesso registrato`
+        : `Ultimo accesso: <b>${h(quando(r.ultimo_accesso))}</b> · ${r.accessi_30g} in 30 gg`;
+      return `<div class="list-item acc-row" data-acc="${h(r.socio_id)}">
+        <span class="dot dot-${st}" title="${st}"></span>
+        <div class="grow"><div class="name">${h(r.cognome)} ${h(r.nome)} ${TAG_RUOLO[r.ruolo] || ""}${r.attivo ? "" : '<span class="tag off">disattivo</span>'}</div>
+          <div class="meta">${sotto}</div></div><span class="meta">›</span></div>`;
+    }).join("") || `<p class="meta">Nessun socio in questo filtro.</p>`;
+    main.querySelectorAll("[data-acc]").forEach((el) => (el.onclick = () => sheetAccessiSocio(righe.find((r) => r.socio_id === el.dataset.acc))));
+  };
+  main.innerHTML = `
+    <div class="acc-tiles">
+      <div><strong>${conta("attivo")}</strong><span>attivi negli ultimi 7 giorni</span></div>
+      <div><strong>${conta("attivo") + conta("recente")}</strong><span>attivi negli ultimi 30 giorni</span></div>
+      <div><strong>${conta("mai")}</strong><span>mai entrati</span></div>
+      <div><strong>${conta("inattivo")}</strong><span>inattivi da 30+ giorni</span></div>
+    </div>
+    <div class="chips">${filtri.map(([k, l, n]) => `<button class="chip" data-af="${k}" aria-pressed="${state.accF === k}">${l} <small>· ${n}</small></button>`).join("")}</div>
+    <input class="search" id="acc-q" type="search" placeholder="Cerca socio…" value="${h(state.accQ)}">
+    <div class="card" id="acc-list"></div>
+    <p class="hint">Visibile solo al superadmin. Si registra al massimo un accesso ogni 30 minuti per dispositivo (data, ora e tipo di dispositivo); i dati più vecchi di 6 mesi si cancellano da soli. Il registro è attivo dal 26 novembre 2026: chi è entrato prima risulta "collegato" finché non riapre l'app.</p>`;
+  main.querySelectorAll("[data-af]").forEach((b) => (b.onclick = () => { state.accF = b.dataset.af; tabAccessi(main); }));
+  main.querySelector("#acc-q").oninput = (e) => { state.accQ = e.target.value; draw(); };
+  draw();
+}
+
+async function sheetAccessiSocio(r) {
+  openSheet(`${r.nome} ${r.cognome}`, `<div class="spinner"></div>`);
+  try {
+    const lista = await api.accessiSocio(r.socio_id);
+    const root = $sheet.querySelector(".sheet");
+    if (!root) return;
+    root.innerHTML = `<div class="grab"></div><h2>${h(r.nome)} ${h(r.cognome)}</h2>
+      <div class="acc-tiles" style="margin-top:0">
+        <div><strong>${r.accessi_7g}</strong><span>accessi in 7 giorni</span></div>
+        <div><strong>${r.accessi_30g}</strong><span>accessi in 30 giorni</span></div>
+      </div>
+      <div class="section-title">Ultimi accessi</div>
+      <div class="card">${lista.length ? lista.map((a) => `<div class="list-item"><div class="grow"><div class="name">${h(new Date(a.at).toLocaleString("it-IT", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}</div>
+        <div class="meta">${h(a.dispositivo || "dispositivo")}</div></div></div>`).join("")
+        : `<p class="meta">${r.n_dispositivi ? "Nessun accesso registrato dal 26/11/2026." : "Non ha ancora usato il suo invito."}</p>`}</div>`;
+  } catch (e) { toast("⚠️ " + e.message); closeSheet(); }
 }
 
 // ---------- GARE -----------------------------------------------------
@@ -1032,7 +1108,7 @@ async function tabProfilo(main) {
     <div class="card" style="display:flex;gap:14px;align-items:center">
       <span class="avatar" style="width:56px;height:56px;font-size:20px;margin:0">${h(iniziali(me))}</span>
       <div><h3 style="margin:0">${h(me.nome)} ${h(me.cognome)}</h3>
-        <div class="meta">${isAdmin() ? '<span class="tag admin" style="margin:0">Admin</span>' : "Socio"}</div></div>
+        <div class="meta">${isSuper() ? '<span class="tag super" style="margin:0">Superadmin</span>' : isAdmin() ? '<span class="tag admin" style="margin:0">Admin</span>' : "Socio"}</div></div>
     </div>
     ${codice ? `<div class="card"><div class="meta">IL TUO CODICE DI ACCESSO</div>
       <div style="font:800 28px/1.2 var(--display);letter-spacing:4px">${h(codice)}</div>
@@ -1066,7 +1142,7 @@ async function sezioneAdmin(box) {
       <div class="list-item">
         <span class="avatar" style="margin:0;${s.attivo ? "" : "opacity:.4"}">${h(iniziali(s))}</span>
         <div class="grow"><div class="name">${h(s.cognome)} ${h(s.nome)}
-          ${s.ruolo === "admin" ? '<span class="tag admin">admin</span>' : ""}${s.attivo ? "" : '<span class="tag off">disattivo</span>'}</div>
+          ${TAG_RUOLO[s.ruolo] || ""}${s.attivo ? "" : '<span class="tag off">disattivo</span>'}</div>
           <div class="meta">${s.n_dispositivi ? `📱 ${s.n_dispositivi} dispositiv${s.n_dispositivi === 1 ? "o" : "i"}` : "⏳ invito non ancora usato"}</div></div>
         <button class="btn ghost small" data-socio="${s.id}">Gestisci</button>
       </div>`).join("") || `<p class="meta">Nessun socio trovato.</p>`;
@@ -1161,10 +1237,11 @@ function sheetSocio(s) {
     <div class="card">
       <div class="list-item"><div class="grow"><div class="name">Nuovo codice</div><div class="meta">Scollega tutti i suoi dispositivi e genera un nuovo invito (telefono perso, codice girato ad altri…)</div></div>
         <button class="btn ghost small" id="a-reset">Rigenera</button></div>
+      ${s.ruolo === "superadmin" ? `<div class="list-item"><div class="grow"><div class="name">Superadmin</div><div class="meta">Ruolo protetto: non si può modificare né disattivare dall'app</div></div></div>` : `
       <div class="list-item"><div class="grow"><div class="name">${s.ruolo === "admin" ? "Togli admin" : "Rendi admin"}</div></div>
-        <button class="btn ghost small" id="a-ruolo" ${s.id === api.me.id ? "disabled" : ""}>${s.ruolo === "admin" ? "Togli" : "Promuovi"}</button></div>
+        <button class="btn ghost small" id="a-ruolo" ${s.id === api.me.id ? "disabled" : ""}>${s.ruolo === "admin" ? "Togli" : "Promuovi"}</button></div>`}
       <div class="list-item"><div class="grow"><div class="name">${s.attivo ? "Disattiva accesso" : "Riattiva accesso"}</div><div class="meta">Chi lascia la squadra non vede più nulla</div></div>
-        <button class="btn ${s.attivo ? "danger" : "ghost"} small" id="a-att" ${s.id === api.me.id ? "disabled" : ""}>${s.attivo ? "Disattiva" : "Riattiva"}</button></div>
+        <button class="btn ${s.attivo ? "danger" : "ghost"} small" id="a-att" ${s.id === api.me.id || s.ruolo === "superadmin" ? "disabled" : ""}>${s.attivo ? "Disattiva" : "Riattiva"}</button></div>
     </div>`, (root) => {
     if (s.codice) attivaInvito(root, s.nome, s.codice);
     root.querySelector("#a-reset").onclick = async () => {
@@ -1173,7 +1250,7 @@ function sheetSocio(s) {
       root.querySelector("#inv").innerHTML = bloccoInvito(s.nome, cod);
       attivaInvito(root, s.nome, cod); renderTab();
     };
-    root.querySelector("#a-ruolo").onclick = async () => {
+    if (root.querySelector("#a-ruolo")) root.querySelector("#a-ruolo").onclick = async () => {
       await prova(() => api.aggiornaSocio(s.id, { ruolo: s.ruolo === "admin" ? "socio" : "admin" }), "Ruolo aggiornato");
       closeSheet(); renderTab();
     };

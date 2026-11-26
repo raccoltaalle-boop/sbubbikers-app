@@ -1,6 +1,6 @@
 // MODALITÀ DEMO: dati finti salvati solo su questo dispositivo.
 // Stessa interfaccia di api-supabase.js. Codice d'invito demo: DEMO2026
-const KEY = "sbb-demo-v5";
+const KEY = "sbb-demo-v6";
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
 
 function giorno(offset, ore, minuti = 0) {
@@ -10,7 +10,7 @@ function giorno(offset, ore, minuti = 0) {
 
 function seed() {
   const soci = [
-    { id: "s1", nome: "Alex", cognome: "Demo", ruolo: "admin", attivo: true, codice: "DEMO2026", n_dispositivi: 0 },
+    { id: "s1", nome: "Alex", cognome: "Demo", ruolo: "superadmin", attivo: true, codice: "DEMO2026", n_dispositivi: 0 },
     { id: "s2", nome: "Marco", cognome: "Bianchi", ruolo: "socio", attivo: true, codice: "K7F2QXA9", n_dispositivi: 1 },
     { id: "s3", nome: "Elena", cognome: "Rossi", ruolo: "admin", attivo: true, codice: "PANTADN2", n_dispositivi: 2 },
     { id: "s4", nome: "Bruno", cognome: "Fabbri", ruolo: "socio", attivo: true, codice: "W8RTB3MZ", n_dispositivi: 1 },
@@ -82,7 +82,7 @@ export function createApi() {
   const wait = (x) => new Promise((r) => setTimeout(() => r(structuredClone(x)), 120));
   const socio = (id) => db.soci.find((s) => s.id === id);
   const meObj = () => (db.me ? socio(db.me) : null);
-  const soloAdmin = () => { if (meObj()?.ruolo !== "admin") throw new Error("Solo admin"); };
+  const soloAdmin = () => { if (!["admin", "superadmin"].includes(meObj()?.ruolo)) throw new Error("Solo admin"); };
   const codice = () => Array.from({ length: 8 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
 
   return {
@@ -155,6 +155,22 @@ export function createApi() {
         .map(([p, n]) => ({ socio_id: p.id, nome: p.nome, cognome: p.cognome, giorno: d(n).getDate(), mese: d(n).getMonth() + 1, tra_giorni: n })));
     },
 
+    // ----- accessi (demo: dati finti)
+    async registraAccesso() {},
+    async riepilogoAccessi() {
+      const ora = Date.now(), g = 864e5;
+      const finti = { s1: [0.01, 7], s2: [1.2, 3], s3: [12, 0], s4: [45, 0], s5: [null, 0] };
+      return wait(db.soci.map((s) => {
+        const [fa, n7] = finti[s.id] || [null, 0];
+        return { socio_id: s.id, nome: s.nome, cognome: s.cognome, ruolo: s.ruolo, attivo: s.attivo, n_dispositivi: s.n_dispositivi,
+          ultimo_accesso: fa == null ? null : new Date(ora - fa * g).toISOString(), accessi_7g: n7, accessi_30g: fa != null && fa < 30 ? n7 + 2 : 0 };
+      }));
+    },
+    async accessiSocio(id) {
+      const ora = Date.now();
+      return wait(Array.from({ length: id === "s5" ? 0 : 5 }, (_, i) => ({ at: new Date(ora - (i * 1.7 + 0.01) * 864e5).toISOString(), dispositivo: i % 2 ? "Android" : "iPhone/iPad" })));
+    },
+
     // ----- gare
     async gare() {
       const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
@@ -197,8 +213,8 @@ export function createApi() {
     },
     async annullaPrenotazione(id) {
       const p = db.prenotazioni.find((x) => x.id === id);
-      if (p.socio_id !== db.me && meObj()?.ruolo !== "admin") throw new Error("Permesso negato");
-      if (p.stato === "consegnata" && meObj()?.ruolo !== "admin") throw new Error("Capo già consegnato: contatta un admin");
+      if (p.socio_id !== db.me && !["admin", "superadmin"].includes(meObj()?.ruolo)) throw new Error("Permesso negato");
+      if (p.stato === "consegnata" && !["admin", "superadmin"].includes(meObj()?.ruolo)) throw new Error("Capo già consegnato: contatta un admin");
       const c = db.capi.find((x) => x.id === p.capo_id);
       if (p.scalato && p.stato !== "consegnata") c.taglie.find((x) => x.t === p.taglia).disp += p.qta;
       p.stato = "annullata"; p.annullata_at = new Date().toISOString(); p.annullata_da = db.me; save();
