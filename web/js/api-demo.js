@@ -188,6 +188,11 @@ export function createApi() {
     },
     async resetInvito(id) { soloAdmin(); const s = socio(id); s.codice = codice(); s.n_dispositivi = 0; save(); return s.codice; },
     async aggiornaSocio(id, patch) { soloAdmin(); Object.assign(socio(id), patch); save(); },
+    async aggiungiLuogo(nome) {
+      soloAdmin();
+      if (db.luoghi.some((l) => l.nome.toLowerCase() === nome.toLowerCase())) throw new Error("Esiste già un elemento con questo nome");
+      db.luoghi.push({ id: Math.max(0, ...db.luoghi.map((l) => l.id)) + 1, nome, link_mappa: null, ordine: 100 }); save();
+    },
     async rinominaLuogo(id, nome) { soloAdmin(); db.luoghi.find((l) => l.id === id).nome = nome; save(); },
     async eliminaLuogo(id) {
       soloAdmin();

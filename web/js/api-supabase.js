@@ -160,6 +160,7 @@ export function createApi(cfg) {
     creaSocio: async (nome, cognome, admin) => ok(await sb.rpc("admin_crea_socio", { p_nome: nome, p_cognome: cognome, p_admin: admin })),
     resetInvito: async (id) => ok(await sb.rpc("admin_reset_invito", { p_socio: id })),
     aggiornaSocio: async (id, patch) => ok(await sb.from("soci").update(patch).eq("id", id)),
+    aggiungiLuogo: async (nome) => ok(await sb.from("luoghi").insert({ nome, creato_da: me.id })),
     rinominaLuogo: async (id, nome) => ok(await sb.from("luoghi").update({ nome }).eq("id", id)),
     eliminaLuogo: async (id) => ok(await sb.from("luoghi").delete().eq("id", id)),
   };

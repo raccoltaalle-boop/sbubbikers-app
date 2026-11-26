@@ -841,15 +841,23 @@ async function sezioneAdmin(box) {
       <input class="search" id="qs" type="search" placeholder="Cerca socio…" value="${h(state.cercaSoci)}" style="margin-top:12px">
       <div id="soci-list"></div>
     </div>
-    <div class="section-title">Luoghi di partenza</div>
-    <div class="card">${state.luoghi.map((l) => `
+    <div class="section-title">Luoghi di partenza · ${state.luoghi.length}</div>
+    <div class="card">
+      <button class="btn accent block" id="b-luogo" style="margin-bottom:6px">+ Aggiungi un luogo</button>
+      ${state.luoghi.map((l) => `
       <div class="list-item"><div class="grow">${h(l.nome)}</div>
         <button class="btn ghost small" data-ren="${l.id}">Rinomina</button>
         <button class="btn danger small" data-dl="${l.id}">✕</button></div>`).join("")}
-      <p class="hint">I nuovi luoghi li aggiungono i soci quando creano un'uscita. Un luogo usato da qualche uscita non si può eliminare.</p>
+      <p class="hint">Anche i soci possono aggiungere un luogo quando propongono un'uscita. Un luogo già usato da qualche uscita non si può eliminare, ma si può rinominare.</p>
     </div>`;
   box.querySelector("#qs").oninput = (e) => { state.cercaSoci = e.target.value; draw(); };
   box.querySelector("#b-nuovo").onclick = sheetNuovoSocio;
+  box.querySelector("#b-luogo").onclick = async () => {
+    const nome = (await dialogo({ testo: "Nome del nuovo luogo di partenza (es. Piazzale Kennedy – Rimini)", input: "", ok: "Aggiungi" }))?.trim();
+    if (!nome) return;
+    await prova(() => api.aggiungiLuogo(nome), "Luogo aggiunto");
+    state.luoghi = await api.luoghi(); renderTab();
+  };
   box.querySelectorAll("[data-ren]").forEach((b) => (b.onclick = async () => {
     const l = state.luoghi.find((x) => x.id === Number(b.dataset.ren));
     const nome = await dialogo({ testo: "Nuovo nome del luogo", input: l.nome, ok: "Salva" });
