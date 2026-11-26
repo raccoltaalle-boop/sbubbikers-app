@@ -126,16 +126,21 @@ function renderBenvenuto(me, codice) {
 // ---------- struttura con tab -----------------------------------------
 const TABS = [
   { id: "uscite", ico: "🚴", lbl: "Uscite", titolo: "Uscite" },
+  { id: "gare", ico: "🏁", lbl: "Gare", titolo: "Gare", serve: "gare" },
   { id: "avvisi", ico: "📣", lbl: "Avvisi", titolo: "Avvisi" },
   { id: "divise", ico: "👕", lbl: "Divise", titolo: "Divise", serve: "divise" },
-  { id: "convenzioni", ico: "🤝", lbl: "Sconti", titolo: "Convenzioni" },
-  { id: "profilo", ico: "👤", lbl: "Profilo", titolo: "Profilo" },
+  { id: "altro", ico: "👤", lbl: "Altro", titolo: "Profilo" },
 ];
+const ALTRO = [["profilo", "Profilo"], ["sconti", "Convenzioni"]];
 
 function renderShell() {
+  // vecchi indirizzi (?tab=profilo / ?tab=convenzioni) finiscono in "Altro"
+  if (state.tab === "profilo" || state.tab === "convenzioni") { state.altro = state.tab === "profilo" ? "profilo" : "sconti"; state.tab = "altro"; }
+  state.altro = state.altro || "profilo";
   const tabs = TABS.filter((x) => !x.serve || typeof api[x.serve] === "function");
   if (!tabs.some((t) => t.id === state.tab)) state.tab = "uscite";
-  const t = tabs.find((x) => x.id === state.tab);
+  const t = { ...tabs.find((x) => x.id === state.tab) };
+  if (t.id === "altro") t.titolo = ALTRO.find(([k]) => k === state.altro)[1];
   $app.innerHTML = `
     ${DEMO ? `<div class="demo-banner">Modalità demo: i dati restano su questo dispositivo · <button id="demo-reset">azzera</button></div>` : ""}
     <header class="topbar" id="topbar">
@@ -145,7 +150,8 @@ function renderShell() {
     <main id="main"><div class="spinner"></div></main>
     ${state.tab === "uscite" ? `<button class="fab" id="fab"><span>+</span> Uscita</button>` : ""}
     ${state.tab === "avvisi" && isAdmin() ? `<button class="fab" id="fab"><span>+</span> Avviso</button>` : ""}
-    ${state.tab === "convenzioni" && isAdmin() ? `<button class="fab" id="fab"><span>+</span> Convenzione</button>` : ""}
+    ${state.tab === "altro" && state.altro === "sconti" && isAdmin() ? `<button class="fab" id="fab"><span>+</span> Convenzione</button>` : ""}
+    ${state.tab === "gare" && isAdmin() ? `<button class="fab" id="fab"><span>+</span> Gara</button>` : ""}
     <nav class="tabbar"><div class="tabbar-inner">
       ${tabs.map((x) => `<button class="tab" data-tab="${x.id}" ${x.id === state.tab ? 'aria-current="page"' : ""}>
         <span class="ico">${x.ico}</span><span class="lbl">${x.lbl}</span></button>`).join("")}
@@ -154,7 +160,7 @@ function renderShell() {
   $app.querySelectorAll(".tab").forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; window.scrollTo(0, 0); renderShell(); }));
   document.getElementById("refresh").onclick = () => renderTab();
   const fab = document.getElementById("fab");
-  if (fab) fab.onclick = { uscite: sheetNuovaUscita, avvisi: sheetNuovoAvviso, convenzioni: () => sheetConvenzione() }[state.tab];
+  if (fab) fab.onclick = { uscite: sheetNuovaUscita, avvisi: sheetNuovoAvviso, altro: () => sheetConvenzione(), gare: () => sheetGara() }[state.tab];
   const dr = document.getElementById("demo-reset");
   if (dr) dr.onclick = () => { api.reset(); location.reload(); };
   renderTab();
@@ -167,7 +173,7 @@ async function renderTab() {
   const main = document.getElementById("main");
   if (!main) return;
   try {
-    await { uscite: tabUscite, avvisi: tabAvvisi, divise: tabDivise, convenzioni: tabConvenzioni, profilo: tabProfilo }[state.tab](main);
+    await { uscite: tabUscite, gare: tabGare, avvisi: tabAvvisi, divise: tabDivise, altro: tabAltro }[state.tab](main);
   } catch (e) {
     console.error(e);
     main.innerHTML = `<div class="empty"><div class="big">📡</div><p>${h(e.message || "Errore di caricamento")}</p>
@@ -844,6 +850,137 @@ function sheetEditorCapo(capo, dopo) {
       await prova(() => api.salvaCapo({ id: capo.id, attivo: false }), "Tolto dal catalogo"); closeSheet(); dopo();
     };
     modalita();
+  });
+}
+
+// ---------- ALTRO (Profilo + Convenzioni) --------------------------------
+async function tabAltro(main) {
+  main.innerHTML = `<div class="seg" style="margin-bottom:8px">${ALTRO.map(([k, l]) => `<button data-altro="${k}" aria-pressed="${state.altro === k}">${l}</button>`).join("")}</div><div id="altro-body"></div>`;
+  main.querySelectorAll("[data-altro]").forEach((b) => (b.onclick = () => { state.altro = b.dataset.altro; window.scrollTo(0, 0); renderShell(); }));
+  const body = main.querySelector("#altro-body");
+  await (state.altro === "sconti" ? tabConvenzioni(body) : tabProfilo(body));
+}
+
+// ---------- GARE -----------------------------------------------------
+const CAT_GARE = { strada: { lbl: "Strada", ico: "🚴" }, mtb: { lbl: "MTB", ico: "🚵" }, gravel: { lbl: "Gravel", ico: "🪨" } };
+const TIPI_GARA = { strada: ["Granfondo", "Mediofondo", "Cronometro", "Circuito", "Cicloturistica"], mtb: ["XC", "Marathon", "Granfondo MTB", "Enduro", "Ciclocross", "Cicloturistica"], gravel: ["Gravel", "Gravel race", "Cicloturistica"] };
+const REGIONI = ["Abruzzo", "Basilicata", "Calabria", "Campania", "Emilia-Romagna", "Friuli-Venezia Giulia", "Lazio", "Liguria", "Lombardia", "Marche", "Molise", "Piemonte", "Puglia", "Sardegna", "Sicilia", "Toscana", "Trentino-Alto Adige", "Umbria", "Valle d'Aosta", "Veneto", "San Marino", "Estero"];
+const nomeSito = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return "fonte"; } };
+
+async function tabGare(main) {
+  const gare = await api.gare();
+  state.gCat = state.gCat || null; state.gReg = state.gReg || null;
+  const conta = (c) => gare.filter((g) => g.categoria === c).length;
+  const perCat = gare.filter((g) => !state.gCat || g.categoria === state.gCat);
+  const regioni = [...new Set(perCat.map((g) => g.regione).filter(Boolean))].sort();
+  if (state.gReg && !regioni.includes(state.gReg)) state.gReg = null;
+  const lista = perCat.filter((g) => !state.gReg || g.regione === state.gReg);
+
+  let html = `<div class="chips">
+      <button class="chip" data-gc="" aria-pressed="${!state.gCat}">Tutte</button>
+      ${Object.entries(CAT_GARE).map(([k, c]) => `<button class="chip" data-gc="${k}" aria-pressed="${state.gCat === k}">${c.ico} ${c.lbl}${conta(k) ? ` <small>· ${conta(k)}</small>` : ""}</button>`).join("")}
+    </div>
+    ${regioni.length > 1 ? `<div class="chips" style="padding-top:0">
+      <button class="chip" data-gr="" aria-pressed="${!state.gReg}">Tutta Italia</button>
+      ${regioni.map((r) => `<button class="chip" data-gr="${h(r)}" aria-pressed="${state.gReg === r}">${h(r)}</button>`).join("")}</div>` : ""}`;
+
+  if (!lista.length) {
+    html += `<div class="empty"><div class="big">🏁</div><p><b>Nessuna gara in calendario${state.gCat ? " per questa categoria" : ""}.</b>${isAdmin() ? "<br>Aggiungila con il pulsante + Gara." : ""}</p></div>`;
+  } else {
+    let mese = null;
+    for (const g of lista) {
+      const d = new Date(g.data + "T12:00:00");
+      const k = `${d.getFullYear()}-${d.getMonth()}`;
+      if (k !== mese) { mese = k; html += `<div class="day"><h2>${h(d.toLocaleDateString("it-IT", { month: "long" }))}</h2><small>${d.getFullYear()}</small></div>`; }
+      html += cardGara(g, d);
+    }
+  }
+  main.innerHTML = html;
+
+  main.querySelectorAll("[data-gc]").forEach((b) => (b.onclick = () => { state.gCat = b.dataset.gc || null; tabGare(main); }));
+  main.querySelectorAll("[data-gr]").forEach((b) => (b.onclick = () => { state.gReg = b.dataset.gr || null; tabGare(main); }));
+  main.querySelectorAll("[data-ad]").forEach((b) => (b.onclick = async () => {
+    b.disabled = true;
+    const [id, st] = b.dataset.ad.split("|");
+    const g = gare.find((x) => x.id === id);
+    const attuale = g.adesioni.find((a) => a.socio_id === api.me.id)?.stato;
+    const nuovo = attuale === st ? null : st;
+    await prova(() => api.aderisciGara(id, nuovo), nuovo === "vado" ? "Ci vai! 🏁" : nuovo === "interessa" ? "Segnata come interessante" : "Tolta");
+    tabGare(main);
+  }));
+  main.querySelectorAll("[data-gmod]").forEach((b) => (b.onclick = () => sheetGara(gare.find((x) => x.id === b.dataset.gmod))));
+  main.querySelectorAll("[data-gdel]").forEach((b) => (b.onclick = async () => {
+    if (!(await dialogo({ testo: "Eliminare questa gara dal calendario?", ok: "Elimina", pericolo: true }))) return;
+    await prova(() => api.eliminaGara(b.dataset.gdel), "Gara eliminata"); tabGare(main);
+  }));
+}
+
+function cardGara(g, d) {
+  const mio = g.adesioni.find((a) => a.socio_id === api.me.id)?.stato;
+  const vanno = g.adesioni.filter((a) => a.stato === "vado"), interessati = g.adesioni.filter((a) => a.stato === "interessa");
+  const persone = [...vanno, ...interessati];
+  const txt = [vanno.length && `${vanno.length} ${vanno.length === 1 ? "ci va" : "ci vanno"}`, interessati.length && `${interessati.length} interessat${interessati.length === 1 ? "o" : "i"}`].filter(Boolean).join(" · ");
+  const link = safeUrl(g.link);
+  const luogo = [g.localita && `${h(g.localita)}${g.provincia ? ` (${h(g.provincia)})` : ""}`, g.circuito && h(g.circuito)].filter(Boolean).join(" · ");
+  return `<article class="race">
+    <div class="rdate"><b>${String(d.getDate()).padStart(2, "0")}</b><span>${h(d.toLocaleDateString("it-IT", { weekday: "short" }))}</span></div>
+    <div><span class="gtype g-${h(g.categoria)}">${h(g.tipo || CAT_GARE[g.categoria]?.lbl)}</span>
+      <div class="rname">${h(g.nome)}</div>
+      ${luogo ? `<div class="rmeta">📍 ${luogo}</div>` : ""}
+      ${g.note ? `<p class="note" style="margin-top:6px">${h(g.note)}</p>` : ""}
+      ${link ? `<a class="src" href="${link}" target="_blank" rel="noopener">Dettagli e iscrizioni: ${h(nomeSito(g.link))} ↗</a>` : ""}
+    </div>
+    <div class="racefoot">
+      <div class="people">${persone.slice(0, 4).map((p) => `<span class="avatar" ${p.stato === "interessa" ? 'style="background:var(--muted)"' : ""} title="${h(p.nome)} ${h(p.cognome)}">${h(iniziali(p))}</span>`).join("")}
+        <span class="people-txt">${txt || "Nessuno ancora"}</span></div>
+      <div class="row-actions" style="margin:0;flex-wrap:nowrap">
+        <button class="btn small ${mio === "interessa" ? "going" : "ghost"}" data-ad="${g.id}|interessa">${mio === "interessa" ? "✓ " : ""}Mi interessa</button>
+        <button class="btn small ${mio === "vado" ? "going" : "accent"}" data-ad="${g.id}|vado">${mio === "vado" ? "✓ Ci vado" : "Ci vado"}</button>
+      </div>
+    </div>
+    ${isAdmin() ? `<div class="row-actions" style="grid-column:1/-1;margin-top:0"><button class="link-btn" data-gmod="${g.id}">Modifica</button><button class="link-btn" data-gdel="${g.id}">Elimina</button></div>` : ""}
+  </article>`;
+}
+
+function sheetGara(g = {}) {
+  const cat = { v: g.categoria || "mtb" };
+  const oggi = new Date(); const def = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
+  openSheet(g.id ? "Modifica gara" : "Nuova gara", `
+    <form id="f-gara">
+      <div class="field"><span class="lbl">Categoria</span>
+        <div class="choice" id="g-cat">${Object.entries(CAT_GARE).map(([k, c]) => `<button type="button" class="chip" data-v="${k}" aria-pressed="${cat.v === k}">${c.ico} ${c.lbl}</button>`).join("")}</div></div>
+      <div class="field"><label for="g-nome">Nome della gara</label><input class="input" id="g-nome" required maxlength="120" value="${h(g.nome)}"></div>
+      <div class="grid2">
+        <div class="field"><label for="g-data">Data</label><input class="input" type="date" id="g-data" required value="${h(g.data || def)}"></div>
+        <div class="field"><label for="g-tipo">Tipo <span class="opt">(facolt.)</span></label><input class="input" id="g-tipo" list="g-tipi" maxlength="40" value="${h(g.tipo)}" placeholder="XC, Granfondo…"><datalist id="g-tipi"></datalist></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="g-loc">Località</label><input class="input" id="g-loc" maxlength="80" value="${h(g.localita)}"></div>
+        <div class="field"><label for="g-prov">Provincia</label><input class="input" id="g-prov" maxlength="4" value="${h(g.provincia)}" placeholder="RN" autocapitalize="characters"></div>
+      </div>
+      <div class="field"><label for="g-reg">Regione</label><select class="input" id="g-reg"><option value="">—</option>${REGIONI.map((r) => `<option ${g.regione === r ? "selected" : ""}>${h(r)}</option>`).join("")}</select></div>
+      <div class="field"><label for="g-circ">Circuito <span class="opt">(facolt.)</span></label><input class="input" id="g-circ" maxlength="80" value="${h(g.circuito)}"></div>
+      <div class="field"><label for="g-link">Link della fonte / iscrizioni</label><input class="input" type="url" id="g-link" placeholder="https://" value="${h(g.link)}"></div>
+      <div class="field"><label for="g-note">Note per la squadra <span class="opt">(facolt.)</span></label><textarea class="input" id="g-note" rows="2" maxlength="500" placeholder="Trasferta insieme, ritrovo, quota…">${h(g.note)}</textarea></div>
+      <div class="error" id="err"></div>
+      <button class="btn accent block" id="g-save">Salva</button>
+    </form>`, (root) => {
+    const $ = (q) => root.querySelector(q);
+    const tipi = () => { $("#g-tipi").innerHTML = TIPI_GARA[cat.v].map((t) => `<option value="${h(t)}">`).join(""); };
+    root.querySelectorAll("#g-cat .chip").forEach((b) => (b.onclick = () => { cat.v = b.dataset.v; root.querySelectorAll("#g-cat .chip").forEach((x) => x.setAttribute("aria-pressed", x === b)); tipi(); }));
+    tipi();
+    $("#f-gara").onsubmit = async (e) => {
+      e.preventDefault();
+      const v = (id) => $(id).value.trim() || null;
+      const link = v("#g-link");
+      if (link && !/^https?:\/\//i.test(link)) return ($("#err").textContent = "Il link deve iniziare con https://");
+      $("#g-save").disabled = true;
+      try {
+        await prova(() => api.salvaGara({ ...(g.id ? { id: g.id } : {}), categoria: cat.v, nome: v("#g-nome"), data: $("#g-data").value, tipo: v("#g-tipo"),
+          localita: v("#g-loc"), provincia: v("#g-prov")?.toUpperCase() || null, regione: v("#g-reg"), circuito: v("#g-circ"), link, note: v("#g-note") }), "Gara salvata");
+        closeSheet(); state.gCat = cat.v; renderTab();
+      } catch { $("#g-save").disabled = false; }
+    };
   });
 }
 

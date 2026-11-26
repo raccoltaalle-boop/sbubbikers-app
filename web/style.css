@@ -297,3 +297,16 @@ details.more summary { font-weight: 700; color: var(--accent); cursor: pointer; 
 .size.zero[aria-pressed="true"] { color: var(--paper); border-style: solid; }
 .size.zero[aria-pressed="true"] small { color: var(--accent); opacity: 1; }
 .card.annul { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 45%, var(--card)); }
+
+/* ----- gare ----- */
+.race { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 10px 0; display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 12px; }
+.rdate { background: var(--ink); color: var(--paper); border-radius: 12px; text-align: center; padding: 6px 0; align-self: start; }
+.rdate b { display: block; font: 800 26px/1 var(--display); }
+.rdate span { font: 700 11px/1.4 var(--display); letter-spacing: 1px; text-transform: uppercase; }
+.rname { font: 700 19px/1.15 var(--display); margin-top: 4px; }
+.rmeta { color: var(--muted); font-size: 14px; margin-top: 3px; }
+.gtype { display: inline-block; font: 700 11px/1 var(--display); letter-spacing: 1px; text-transform: uppercase; padding: 4px 7px; border-radius: 6px; }
+.g-mtb { background: #e6f4ea; color: #1e7a3c; } .g-strada { background: #e8f0ff; color: #2450b3; } .g-gravel { background: #f3ead9; color: #8a5a12; }
+.race .src { display: inline-block; margin-top: 6px; font-size: 13px; color: var(--accent); }
+.racefoot { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; flex-wrap: wrap; }
+.chip small { opacity: .65; }

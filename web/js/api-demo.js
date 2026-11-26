@@ -1,6 +1,6 @@
 // MODALITÀ DEMO: dati finti salvati solo su questo dispositivo.
 // Stessa interfaccia di api-supabase.js. Codice d'invito demo: DEMO2026
-const KEY = "sbb-demo-v4";
+const KEY = "sbb-demo-v5";
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
 
 function giorno(offset, ore, minuti = 0) {
@@ -66,7 +66,13 @@ function seed() {
     { id: "p5", capo_id: "c1", socio_id: "s4", taglia: "L", qta: 2, stato: "attesa", pagato: false, created_at: giorno(-3, 21) },
     { id: "p6", capo_id: "c5", socio_id: "s1", taglia: "40-43", qta: 2, stato: "consegnata", scalato: true, pagato: true, created_at: giorno(-9, 12) },
   ];
-  return { soci, tipi, luoghi, uscite, avvisi, convenzioni, capi, prenotazioni, me: null };
+  const gd = (n) => { const x = new Date(); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
+  const gare = [
+    { id: "g1", data: gd(3), nome: "Memorial d'esempio", categoria: "mtb", tipo: "Ciclocross", localita: "Roverchiara", provincia: "VR", regione: "Veneto", circuito: "Trofeo Triveneto Ciclocross", link: "https://www.pianetamountainbike.it/calendario-gare-mtb", note: null, adesioni: [{ socio_id: "s2", stato: "vado" }] },
+    { id: "g2", data: gd(10), nome: "Granfondo delle colline (esempio)", categoria: "strada", tipo: "Granfondo", localita: "Rimini", provincia: "RN", regione: "Emilia-Romagna", circuito: null, link: null, note: "Trasferta in auto insieme, ritrovo 6:30", adesioni: [{ socio_id: "s3", stato: "interessa" }, { socio_id: "s4", stato: "vado" }] },
+    { id: "g3", data: gd(17), nome: "Gravel dei calanchi (esempio)", categoria: "gravel", tipo: "Gravel", localita: "Pesaro", provincia: "PU", regione: "Marche", circuito: null, link: null, note: null, adesioni: [] },
+  ];
+  return { soci, tipi, luoghi, uscite, avvisi, convenzioni, capi, prenotazioni, gare, me: null };
 }
 
 export function createApi() {
@@ -148,6 +154,26 @@ export function createApi() {
       return wait([[socio("s2"), 0], [socio("s4"), 3]].filter(([, n]) => n <= giorni)
         .map(([p, n]) => ({ socio_id: p.id, nome: p.nome, cognome: p.cognome, giorno: d(n).getDate(), mese: d(n).getMonth() + 1, tra_giorni: n })));
     },
+
+    // ----- gare
+    async gare() {
+      const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
+      return wait(db.gare.filter((g) => new Date(g.data + "T12:00:00") >= oggi).sort((a, b) => a.data.localeCompare(b.data))
+        .map((g) => ({ ...g, adesioni: g.adesioni.map((a) => ({ ...a, ...socio(a.socio_id) })) })));
+    },
+    async aderisciGara(id, stato) {
+      const g = db.gare.find((x) => x.id === id);
+      g.adesioni = g.adesioni.filter((a) => a.socio_id !== db.me);
+      if (stato) g.adesioni.push({ socio_id: db.me, stato });
+      save();
+    },
+    async salvaGara(g) {
+      soloAdmin();
+      if (g.id) Object.assign(db.gare.find((x) => x.id === g.id), g);
+      else db.gare.push({ ...g, id: uid(), adesioni: [] });
+      save();
+    },
+    async eliminaGara(id) { soloAdmin(); db.gare = db.gare.filter((g) => g.id !== id); save(); },
 
     // ----- divise
     divise: () => wait(db.capi.filter((c) => c.attivo !== false)),

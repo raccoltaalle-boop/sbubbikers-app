@@ -77,6 +77,22 @@ export function createApi(cfg) {
 
     compleanni: async (giorni = 7) => ok(await sb.rpc("compleanni", { p_giorni: giorni })),
 
+    // ----- gare
+    async gare() {
+      const oggi = new Date(); const d = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
+      const rows = ok(await sb.from("gare").select("*,adesioni:gare_adesioni(socio_id,stato,socio:soci(nome,cognome))").gte("data", d).order("data").order("nome"));
+      return rows.map((g) => ({ ...g, adesioni: (g.adesioni || []).map((a) => ({ socio_id: a.socio_id, stato: a.stato, ...a.socio })) }));
+    },
+    async aderisciGara(id, stato) {
+      if (!stato) return ok(await sb.from("gare_adesioni").delete().eq("gara_id", id).eq("socio_id", me.id));
+      return ok(await sb.from("gare_adesioni").upsert({ gara_id: id, socio_id: me.id, stato }, { onConflict: "gara_id,socio_id" }));
+    },
+    async salvaGara({ id, ...dati }) {
+      if (id) return ok(await sb.from("gare").update(dati).eq("id", id));
+      return ok(await sb.from("gare").insert({ ...dati, creato_da: me.id }));
+    },
+    eliminaGara: async (id) => ok(await sb.from("gare").delete().eq("id", id)),
+
     // ----- uscite
     async uscite() {
       const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
