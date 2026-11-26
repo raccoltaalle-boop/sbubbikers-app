@@ -235,6 +235,10 @@ async function tabUscite(main) {
     tabUscite(main);
   }));
   main.querySelectorAll("[data-share]").forEach((b) => (b.onclick = () => condividiUscita(uscite.find((u) => u.id === b.dataset.share))));
+  main.querySelectorAll("[data-espandi]").forEach((card) => (card.onclick = (e) => {
+    if (e.target.closest("a, button:not([data-toggle])")) return;
+    card.classList.toggle("open");
+  }));
 
   if (state.focusUscita) {
     const el = document.getElementById("u-" + state.focusUscita);
@@ -251,14 +255,10 @@ function cardUscita(u) {
   const passata = new Date(u.data_ora) < new Date();
   const mappa = safeUrl(u.luogo?.link_mappa) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(u.luogo?.nome || "")}`;
   const percorso = safeUrl(u.link_percorso);
-  const stats = [
-    u.km && `📏 ${u.km} km`,
-    u.dislivello && `⛰️ ${u.dislivello} m D+`,
-    u.andatura && ANDATURE[u.andatura],
-  ].filter(Boolean);
-  const visibili = persone.slice(0, 5);
-  const testoPersone = persone.length === 1 ? `${nomeBreve(u.autore)} cerca compagnia`
-    : `${persone.length} ciclisti · ${persone.slice(0, 3).map((p) => h(p.nome)).join(", ")}${persone.length > 3 ? "…" : ""}`;
+  const stats = [u.km && `${u.km} km`, u.dislivello && `${u.dislivello} m`].filter(Boolean).map(h);
+  if (u.andatura) stats.push(`<span title="Andatura ${h(u.andatura)}">${ANDATURE[u.andatura].split(" ")[0]}</span>`);
+  const testoPersone = persone.length === 1 ? `${h(nomeBreve(u.autore))} cerca compagnia`
+    : `${persone.length} · ${persone.slice(0, 3).map((p) => h(p.nome)).join(", ")}${persone.length > 3 ? "…" : ""}`;
 
   let azione = "";
   if (u.annullata) azione = `<span class="badge-cancel">Annullata</span>`;
@@ -266,27 +266,32 @@ function cardUscita(u) {
   else if (!passata) azione = ciSono
     ? `<button class="btn going small" data-join="${u.id}" data-on="0">✓ Ci sono</button>`
     : `<button class="btn accent small" data-join="${u.id}" data-on="1">Partecipo</button>`;
+  const extra = true; // dettagli sempre disponibili al tocco (andatura, percorso, condividi)
 
-  return `<article class="ride ${mia ? "mine" : ""} ${u.annullata ? "cancelled" : ""}" id="u-${u.id}">
-    <div class="ride-head">
-      <div class="ride-time">${fmtOra(u.data_ora)}</div>
-      <div style="flex:1;min-width:0">
-        <div class="ride-type">${h(u.tipo?.emoji)} ${h(u.tipo?.nome)}</div>
-        <div class="ride-place">📍 <a href="${mappa}" target="_blank" rel="noopener">${h(u.luogo?.nome)}</a></div>
-      </div>
-      <button class="icon-btn" data-share="${u.id}" aria-label="Condividi">↗</button>
+  return `<article class="ride ${mia ? "mine" : ""} ${u.annullata ? "cancelled" : ""}" id="u-${u.id}" data-espandi>
+    <div class="r1">
+      <span class="ride-time">${fmtOra(u.data_ora)}</span>
+      <span class="ride-type">${h(u.tipo?.emoji)} ${h(u.tipo?.nome)}</span>
+      ${stats.length ? `<span class="r-stats">${stats.join(" · ")}</span>` : ""}
     </div>
-    ${stats.length ? `<div class="stats">${stats.map((s) => `<span class="stat">${s}</span>`).join("")}</div>` : ""}
-    ${u.note ? `<p class="note">${h(u.note)}</p>` : ""}
-    ${percorso ? `<p class="note"><a href="${percorso}" target="_blank" rel="noopener">🗺️ Vedi il percorso</a></p>` : ""}
-    <div class="ride-foot">
+    <div class="r2"><span class="r-luogo">📍 <a href="${mappa}" target="_blank" rel="noopener">${h(u.luogo?.nome)}</a></span></div>
+    ${u.note ? `<p class="r-note">${h(u.note)}</p>` : ""}
+    ${extra ? `<div class="r-extra">
+      ${u.andatura ? `<span>${ANDATURE[u.andatura]}</span>` : ""}
+      ${percorso ? `<a href="${percorso}" target="_blank" rel="noopener">🗺️ Percorso</a>` : ""}
+      <button class="link-btn" data-share="${u.id}">↗ Condividi</button>
+      ${isAdmin() && !mia && !u.annullata ? `<button class="link-btn" data-cancel="${u.id}">Annulla (admin)</button>` : ""}
+    </div>` : ""}
+    <div class="r3">
       <div class="people">
-        ${visibili.map((p) => `<span class="avatar" title="${h(p.nome)} ${h(p.cognome)}">${h(iniziali(p))}</span>`).join("")}
+        ${persone.slice(0, 4).map((p) => `<span class="avatar" title="${h(p.nome)} ${h(p.cognome)}">${h(iniziali(p))}</span>`).join("")}
         <span class="people-txt">${testoPersone}</span>
       </div>
-      ${azione}
+      <div class="r-act">
+        <button class="mini-ico" data-toggle aria-label="Dettagli">⌄</button>
+        ${azione}
+      </div>
     </div>
-    ${isAdmin() && !mia && !u.annullata ? `<div class="row-actions"><button class="link-btn" data-cancel="${u.id}">Annulla (admin)</button></div>` : ""}
   </article>`;
 }
 
