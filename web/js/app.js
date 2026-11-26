@@ -314,7 +314,7 @@ function sheetNuovaUscita() {
       </details>
       <div class="error" id="err"></div>
       <button class="btn accent block" id="pubblica">Pubblica uscita</button>
-      <p class="hint" style="text-align:center">Verrà pubblicata anche sul canale Telegram della squadra.</p>
+      ${cfg.TELEGRAM_CHANNEL_URL ? `<p class="hint" style="text-align:center">Verrà pubblicata anche sul canale Telegram della squadra.</p>` : ""}
     </form>`, (root) => {
     const sceltaSingola = (id, key, toggle) => root.querySelectorAll(`#${id} .chip`).forEach((b) => (b.onclick = () => {
       const v = b.dataset.v;
@@ -365,7 +365,7 @@ async function tabAvvisi(main) {
     </article>`).join("")
     : `<div class="empty"><div class="big">📭</div><p>Nessun avviso, tutto tranquillo.</p></div>`;
   main.querySelectorAll("[data-del]").forEach((b) => (b.onclick = async () => {
-    if (!(await dialogo({ testo: "Eliminare l'avviso? Il bot prova a toglierlo anche da Telegram (possibile entro 48 ore).", ok: "Elimina", pericolo: true }))) return;
+    if (!(await dialogo({ testo: cfg.TELEGRAM_CHANNEL_URL ? "Eliminare l'avviso? Il bot prova a toglierlo anche da Telegram (possibile entro 48 ore)." : "Eliminare l'avviso?", ok: "Elimina", pericolo: true }))) return;
     await prova(() => api.eliminaAvviso(b.dataset.del), "Avviso eliminato"); tabAvvisi(main);
   }));
 }
@@ -375,7 +375,7 @@ function sheetNuovoAvviso() {
     <form id="f-avv">
       <div class="field"><label for="tit">Titolo</label><input class="input" id="tit" required maxlength="120"></div>
       <div class="field"><label for="txt">Testo</label><textarea class="input" id="txt" rows="6" required maxlength="3000"></textarea></div>
-      <div class="field"><label class="check"><input type="checkbox" id="tg" checked> Pubblica anche sul canale Telegram</label></div>
+      ${cfg.TELEGRAM_CHANNEL_URL ? `<div class="field"><label class="check"><input type="checkbox" id="tg" checked> Pubblica anche sul canale Telegram</label></div>` : ""}
       <div class="error" id="err"></div>
       <button class="btn accent block">Pubblica avviso</button>
     </form>`, (root) => {
@@ -384,7 +384,7 @@ function sheetNuovoAvviso() {
       try {
         await prova(() => api.creaAvviso({
           titolo: root.querySelector("#tit").value.trim(), testo: root.querySelector("#txt").value.trim(),
-          pubblica_telegram: root.querySelector("#tg").checked,
+          pubblica_telegram: root.querySelector("#tg")?.checked ?? false,
         }), "Avviso pubblicato 📣");
         closeSheet(); renderTab();
       } catch {}
@@ -804,11 +804,11 @@ async function tabProfilo(main) {
       <p>Aggiungila alla schermata Home: si apre come un'app vera, a schermo intero.</p>
       <button class="btn ghost small" id="b-inst">Come si fa</button>
     </div>
-    <div class="card">
+    ${safeUrl(cfg.TELEGRAM_CHANNEL_URL) ? `<div class="card">
       <h3>🔔 Notifiche</h3>
       <p>Uscite e avvisi arrivano sul canale Telegram della squadra: tieni attive le notifiche solo lì.</p>
-      ${safeUrl(cfg.TELEGRAM_CHANNEL_URL) ? `<a class="btn accent small" href="${safeUrl(cfg.TELEGRAM_CHANNEL_URL)}" target="_blank" rel="noopener">Apri il canale</a>` : `<p class="meta">(Link al canale da configurare)</p>`}
-    </div>
+      <a class="btn accent small" href="${safeUrl(cfg.TELEGRAM_CHANNEL_URL)}" target="_blank" rel="noopener">Apri il canale</a>
+    </div>` : ""}
     <div id="admin"></div>
     <div style="text-align:center;margin-top:24px"><button class="link-btn" id="b-esci">Scollega questo dispositivo</button></div>`;
   main.querySelector("#b-inst").onclick = sheetInstalla;
