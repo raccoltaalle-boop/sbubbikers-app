@@ -1098,6 +1098,18 @@ function cardGara(g, d, dettaglio = false) {
 // ---------- fonti delle gare (solo superadmin) ---------------------------
 const CAT_FONTI = { ...CAT_GARE, varie: { lbl: "Varie", ico: "🏁" } };
 const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+const IMPORT_AUTO = ["pianetamountainbike.it"];          // siti con import automatico (funzione "gare-import")
+const PROV_REG = (() => {
+  const m = {
+    "Emilia-Romagna": "BO FE FC FO MO PR PC RA RE RN", "Marche": "AN AP FM MC PU PS", "Toscana": "AR FI GR LI LU MS PI PO PT SI",
+    "Lombardia": "BG BS CO CR LC LO MN MI MB PV SO VA", "Veneto": "BL PD RO TV VE VR VI", "Piemonte": "AL AT BI CN NO TO VB VC",
+    "Liguria": "GE IM SP SV", "Friuli-Venezia Giulia": "GO PN TS UD", "Trentino-Alto Adige": "BZ TN", "Valle d'Aosta": "AO",
+    "Umbria": "PG TR", "Lazio": "FR LT RI RM VT", "Abruzzo": "AQ CH PE TE", "Molise": "CB IS", "Campania": "AV BN CE NA SA",
+    "Puglia": "BA BT BR FG LE TA", "Basilicata": "MT PZ", "Calabria": "CS CZ KR RC VV",
+    "Sicilia": "AG CL CT EN ME PA RG SR TP", "Sardegna": "CA CI NU OR OT SS SU VS OG", "San Marino": "SM", "Estero": "EE",
+  };
+  const r = {}; for (const [reg, ps] of Object.entries(m)) for (const p of ps.split(" ")) r[p] = reg; return r;
+})();
 
 async function tabFonti(main) {
   const fonti = await api.fontiGare();
@@ -1115,6 +1127,7 @@ async function tabFonti(main) {
           ${f.note ? `<div class="meta">${h(f.note)}</div>` : ""}
           <div class="f-act">
             <button class="btn ghost small" data-fok="${f.id}">✓ Controllata</button>
+            ${IMPORT_AUTO.includes(host(f.url)) ? `<button class="btn accent small" data-fimp="${f.id}">⤓ Importa</button>` : ""}
             <button class="btn ghost small" data-fgara="${f.id}">+ Gara</button>
             <button class="btn ghost small" data-fmod="${f.id}">Modifica</button>
             <button class="btn danger small" data-fdel="${f.id}" aria-label="Elimina">✕</button>
@@ -1129,10 +1142,73 @@ async function tabFonti(main) {
     const f = trova(b.dataset.fgara);
     sheetGara({ categoria: CAT_GARE[f.categoria] ? f.categoria : "mtb", link: f.url });
   }));
+  main.querySelectorAll("[data-fimp]").forEach((b) => (b.onclick = () => sheetImportaGare(trova(b.dataset.fimp), () => tabFonti(main))));
   main.querySelectorAll("[data-fdel]").forEach((b) => (b.onclick = async () => {
     if (!(await dialogo({ testo: `Eliminare la pagina "${trova(b.dataset.fdel).nome}"? Le gare già inserite restano.`, ok: "Elimina", pericolo: true }))) return;
     await prova(() => api.eliminaFonte(b.dataset.fdel), "Pagina eliminata"); tabFonti(main);
   }));
+}
+
+function sheetImportaGare(f, dopo) {
+  const st = { regione: REGIONE_CASA, trovate: null, scelte: new Set(), esistenti: new Set(), cat: "tutte" };
+  openSheet("Importa gare", `
+    <p class="hint" style="margin-top:0">Da <b>${h(f.nome)}</b>. Vengono lette solo le gare future; scegli tu quali aggiungere al calendario della squadra, con il link alla fonte.</p>
+    <div class="grid2">
+      <div class="field"><label for="im-reg">Regione</label><select class="input" id="im-reg">
+        <option value="">Tutta Italia</option>${REGIONI.filter((r) => r !== "San Marino").map((r) => `<option ${r === st.regione ? "selected" : ""}>${h(r)}</option>`).join("")}</select></div>
+      <div class="field"><span class="lbl">&nbsp;</span><button class="btn accent block" id="im-cerca">Cerca gare</button></div>
+    </div>
+    <div id="im-res"></div>`, (root) => {
+    const $ = (q) => root.querySelector(q);
+    const draw = () => {
+      const box = $("#im-res");
+      if (!st.trovate) { box.innerHTML = ""; return; }
+      const lista = st.trovate.filter((g) => st.cat === "tutte" || g.categoria === st.cat);
+      const nuove = lista.filter((g) => !st.esistenti.has(g.link));
+      const quante = lista.filter((g) => st.scelte.has(g.link)).length;
+      const cats = [...new Set(st.trovate.map((g) => g.categoria))];
+      box.innerHTML = !st.trovate.length ? `<div class="empty"><p>Nessuna gara futura trovata.</p></div>` : `
+        ${cats.length > 1 ? `<div class="chips" style="margin:4px 0 8px">${["tutte", ...cats].map((c) => `<button class="chip" data-imc="${c}" aria-pressed="${st.cat === c}">${c === "tutte" ? "Tutte" : `${CAT_GARE[c].ico} ${CAT_GARE[c].lbl}`}</button>`).join("")}</div>` : ""}
+        <div class="im-head"><span>${lista.length} gare · ${lista.length - nuove.length} già in calendario</span>
+          <button class="link-btn" id="im-tutte">${nuove.length && nuove.every((g) => st.scelte.has(g.link)) ? "Deseleziona" : "Seleziona tutte"}</button></div>
+        <div class="im-list">${lista.map((g) => {
+          const gia = st.esistenti.has(g.link);
+          return `<label class="im-row ${gia ? "gia" : ""}">
+            <input type="checkbox" data-iml="${h(g.link)}" ${gia ? "disabled" : st.scelte.has(g.link) ? "checked" : ""}>
+            <span class="im-d">${h(new Date(g.data + "T12:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" }))}</span>
+            <span class="grow"><b>${h(g.nome)}</b><small>${h(`${CAT_GARE[g.categoria]?.ico || ""} ${[g.tipo, g.localita && `${g.localita}${g.provincia ? ` (${g.provincia})` : ""}`].filter(Boolean).join(" · ")}`)}${gia ? " · già in calendario" : ""}</small></span>
+          </label>`;
+        }).join("")}</div>
+        <button class="btn accent block" id="im-ok" ${quante ? "" : "disabled"} style="margin-top:12px">Aggiungi ${quante || ""} ${quante === 1 ? "gara" : "gare"} al calendario</button>`;
+      box.querySelectorAll("[data-imc]").forEach((b) => (b.onclick = () => { st.cat = b.dataset.imc; draw(); }));
+      box.querySelectorAll("[data-iml]").forEach((c) => (c.onchange = () => { c.checked ? st.scelte.add(c.dataset.iml) : st.scelte.delete(c.dataset.iml); draw(); }));
+      $("#im-tutte") && ($("#im-tutte").onclick = () => {
+        const tutte = nuove.every((g) => st.scelte.has(g.link));
+        nuove.forEach((g) => (tutte ? st.scelte.delete(g.link) : st.scelte.add(g.link))); draw();
+      });
+      $("#im-ok") && ($("#im-ok").onclick = async () => {
+        const sel = st.trovate.filter((g) => st.scelte.has(g.link) && !st.esistenti.has(g.link));
+        $("#im-ok").disabled = true;
+        try {
+          await prova(() => api.inserisciGare(sel.map((g) => ({ categoria: g.categoria, nome: g.nome, data: g.data, tipo: g.tipo,
+            localita: g.localita, provincia: g.provincia, regione: PROV_REG[g.provincia] || st.regione || null, link: g.link }))),
+            `${sel.length} ${sel.length === 1 ? "gara aggiunta" : "gare aggiunte"} al calendario`);
+          closeSheet(); dopo?.();
+        } catch { $("#im-ok").disabled = false; }
+      });
+    };
+    $("#im-reg").onchange = (e) => { st.regione = e.target.value; };
+    $("#im-cerca").onclick = async () => {
+      const b = $("#im-cerca"); b.disabled = true; b.textContent = "Cerco…";
+      try {
+        const [gare, cal] = await Promise.all([api.cercaGareFonte(f.id, st.regione), api.gare()]);
+        st.trovate = gare.sort((a, c) => a.data.localeCompare(c.data)); st.scelte.clear(); st.cat = "tutte";
+        st.esistenti = new Set(cal.map((g) => g.link).filter(Boolean));
+        draw();
+      } catch (e) { $("#im-res").innerHTML = `<div class="error">${h(e.message || e)}</div>`; }
+      b.disabled = false; b.textContent = "Cerca gare";
+    };
+  });
 }
 
 function sheetFonte(f = {}, dopo) {

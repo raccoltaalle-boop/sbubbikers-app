@@ -380,3 +380,12 @@ details.more summary { font-weight: 700; color: var(--accent); cursor: pointer; 
 .fonte .meta a { color: var(--accent); font-weight: 600; text-decoration: none; }
 .fonte .f-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .fonte .f-act .btn.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.im-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--muted); margin: 6px 0; }
+.im-list { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.im-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 10px; border-top: 1px solid var(--line); cursor: pointer; }
+.im-row:first-child { border-top: 0; }
+.im-row input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--accent); flex: none; }
+.im-row .im-d { flex: none; width: 52px; font: 700 14px/1.2 var(--display); text-transform: uppercase; }
+.im-row b { display: block; font-size: 14px; line-height: 1.25; }
+.im-row small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.im-row.gia { opacity: .5; cursor: default; }

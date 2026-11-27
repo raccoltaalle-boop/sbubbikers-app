@@ -91,6 +91,16 @@ export function createApi(cfg) {
       if (id) return ok(await sb.from("gare").update(dati).eq("id", id));
       return ok(await sb.from("gare").insert({ ...dati, creato_da: me.id }));
     },
+    async cercaGareFonte(fonte_id, regione) {
+      const { data, error } = await sb.functions.invoke("gare-import", { body: { fonte_id, regione } });
+      if (error) {
+        let msg = error.message;
+        try { msg = (await error.context.json()).error || msg; } catch { /* ignora */ }
+        throw new Error(msg);
+      }
+      return data.gare;
+    },
+    async inserisciGare(lista) { return ok(await sb.from("gare").insert(lista.map((g) => ({ ...g, creato_da: me.id })))); },
     fontiGare: async () => ok(await sb.from("fonti_gare").select("*").order("categoria").order("nome")),
     async salvaFonte({ id, ...d }) { return ok(id ? await sb.from("fonti_gare").update(d).eq("id", id) : await sb.from("fonti_gare").insert(d)); },
     eliminaFonte: async (id) => ok(await sb.from("fonti_gare").delete().eq("id", id)),

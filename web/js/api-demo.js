@@ -190,6 +190,25 @@ export function createApi() {
       else db.gare.push({ ...g, id: uid(), adesioni: [] });
       save();
     },
+    async cercaGareFonte(id, regione) {
+      soloSuper();
+      const f = db.fonti.find((x) => x.id === id);
+      if (!/pianetamountainbike\.it/.test(f.url)) throw new Error(`Import automatico non ancora disponibile per ${new URL(f.url).hostname}`);
+      f.ultimo_controllo = new Date().toISOString(); save();
+      const d = (n) => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+      const base = "https://www.pianetamountainbike.it/calendario-gare-mtb/";
+      return wait([
+        { data: d(20), nome: "GF Panighina MTB Race", tipo: "Granfondo MTB", categoria: "mtb", localita: "Bertinoro", provincia: "FO", link: base + "granfondo/5721-gf-panighina-mtb-race" },
+        { data: d(34), nome: "GP Fiscaglia MTB", tipo: "Granfondo MTB", categoria: "mtb", localita: "Massa Fiscaglia", provincia: "FE", link: base + "granfondo/5456-gp-fiscaglia-mtb" },
+        { data: d(60), nome: "Sassorace", tipo: "Granfondo MTB", categoria: "mtb", localita: "Sasso Marconi", provincia: "BO", link: base + "granfondo/5244-sassorace" },
+        { data: d(90), nome: "Emilia Gravel (bikepacking)", tipo: "Gravel", categoria: "gravel", localita: "Busseto", provincia: "PR", link: base + "gravel/5702-emilia-gravel-bikepacking" },
+      ].filter(() => !regione || regione === "Emilia-Romagna"));
+    },
+    async inserisciGare(lista) {
+      soloAdmin();
+      for (const g of lista) db.gare.push({ id: "g" + Date.now() + Math.random().toString(36).slice(2, 6), adesioni: [], creato_da: db.me, ...g });
+      save();
+    },
     fontiGare() {
       soloSuper();
       db.fonti ??= [{ id: "f1", nome: "Pianeta Mountain Bike", url: "https://www.pianetamountainbike.it/calendario-gare-mtb", categoria: "mtb", note: "Calendario nazionale MTB, filtrabile per regione", ultimo_controllo: null }];
