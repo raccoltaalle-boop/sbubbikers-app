@@ -357,3 +357,21 @@ details.more summary { font-weight: 700; color: var(--accent); cursor: pointer; 
 .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .dot-attivo { background: var(--ok); } .dot-recente { background: #e0b400; } .dot-collegato { background: #9aa3ad; }
 .dot-inattivo { background: var(--warn); } .dot-mai { background: transparent; border: 2px solid var(--muted); }
+
+/* ---------- meteo sulle uscite ---------- */
+.ride .wx { flex: none; font: 600 12.5px/1 var(--body); padding: 3px 8px; border-radius: 999px; background: #e6f1fb; color: #0c447c; white-space: nowrap; }
+.ride .wx.wait { width: 44px; height: 18px; padding: 0; background: var(--line); opacity: .5; }
+.ride .wx.rain { background: #faeeda; color: #854f0b; }
+.ride .wx.off { background: transparent; border: 1px dashed var(--line); color: var(--muted); font-weight: 500; }
+.ride .wx-det { flex-basis: 100%; background: var(--paper); border-radius: 10px; padding: 8px 10px; font-size: 13px; color: var(--ink-2); }
+.ride .wx-ore { display: flex; justify-content: space-between; gap: 6px; }
+.ride .wx-ore span { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.ride .wx-ore small { font-size: 11px; color: var(--muted); }
+.ride .wx-ore b { color: var(--ink); }
+.ride .wx-txt { margin-top: 6px; line-height: 1.35; }
+.ride .wx-src { margin-top: 4px; font-size: 11px; color: var(--muted); }
+.ride .wx-src a { color: inherit; }
+@media (prefers-color-scheme: dark) {
+  .ride .wx { background: #0c447c; color: #e6f1fb; }
+  .ride .wx.rain { background: #633806; color: #faeeda; }
+}

@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const USCITA_SELECT =
   "id,socio_id,data_ora,km,dislivello,andatura,note,link_percorso,annullata," +
-  "tipo:tipi_bici(id,nome,emoji),luogo:luoghi(id,nome,link_mappa)," +
+  "tipo:tipi_bici(id,nome,emoji),luogo:luoghi(id,nome,link_mappa,lat,lon)," +
   "autore:soci!uscite_socio_id_fkey(nome,cognome)," +
   "partecipanti(socio_id,socio:soci(nome,cognome))";
 
@@ -191,6 +191,7 @@ export function createApi(cfg) {
     resetInvito: async (id) => ok(await sb.rpc("admin_reset_invito", { p_socio: id })),
     aggiornaSocio: async (id, patch) => ok(await sb.from("soci").update(patch).eq("id", id)),
     aggiungiLuogo: async (nome) => ok(await sb.from("luoghi").insert({ nome, creato_da: me.id })),
+    impostaCoordinateLuogo: async (id, lat, lon) => ok(await sb.rpc("imposta_coordinate_luogo", { p_id: id, p_lat: lat, p_lon: lon })),
     rinominaLuogo: async (id, nome) => ok(await sb.from("luoghi").update({ nome }).eq("id", id)),
     eliminaLuogo: async (id) => ok(await sb.from("luoghi").delete().eq("id", id)),
   };

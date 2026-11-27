@@ -1,4 +1,5 @@
 // ===== SBUBBIKERS — logica dell'app ====================================
+import { meteoUscita, coordDaTesto, cercaPerNome } from "./meteo.js";
 const cfg = window.SBB_CONFIG || {};
 const DEMO = !cfg.SUPABASE_URL;
 let api;
@@ -248,6 +249,8 @@ async function tabUscite(main) {
     card.classList.toggle("open");
   }));
 
+  attivaMeteo(main, lista);
+
   if (state.focusUscita) {
     const el = document.getElementById("u-" + state.focusUscita);
     if (el) { el.classList.add("highlight"); el.scrollIntoView({ block: "center", behavior: "smooth" }); }
@@ -282,9 +285,10 @@ function cardUscita(u) {
       <span class="ride-type">${h(u.tipo?.emoji)} ${h(u.tipo?.nome)}</span>
       ${stats.length ? `<span class="r-stats">${stats.join(" · ")}</span>` : ""}
     </div>
-    <div class="r2"><span class="r-luogo">📍 <a href="${mappa}" target="_blank" rel="noopener">${h(u.luogo?.nome)}</a></span></div>
+    <div class="r2"><span class="r-luogo">📍 <a href="${mappa}" target="_blank" rel="noopener">${h(u.luogo?.nome)}</a></span>${meteoOk(u) ? `<span class="wx wait" data-wx="${u.id}"></span>` : ""}</div>
     ${u.note ? `<p class="r-note">${h(u.note)}</p>` : ""}
     ${extra ? `<div class="r-extra">
+      ${meteoOk(u) ? `<div class="wx-det" data-wxd="${u.id}"></div>` : ""}
       ${u.andatura ? `<span>${ANDATURE[u.andatura]}</span>` : ""}
       ${percorso ? `<a href="${percorso}" target="_blank" rel="noopener">🗺️ Percorso</a>` : ""}
       <button class="link-btn" data-share="${u.id}">↗ Condividi</button>
@@ -301,6 +305,39 @@ function cardUscita(u) {
       </div>
     </div>
   </article>`;
+}
+
+// ---------- meteo sulle uscite ------------------------------------------
+const meteoOk = (u) => !u.annullata && new Date(u.data_ora).getTime() > Date.now() - 2 * 36e5;
+const oraBreve = (t) => new Date(t * 1000).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+
+function attivaMeteo(main, uscite) {
+  for (const u of uscite) {
+    const chip = main.querySelector(`[data-wx="${u.id}"]`);
+    if (!chip) continue;
+    const det = main.querySelector(`[data-wxd="${u.id}"]`);
+    meteoUscita(u, api).then((m) => {
+      if (!m) { chip.remove(); det?.remove(); return; }
+      chip.classList.remove("wait");
+      if (m.fuori) {
+        chip.classList.add("off");
+        chip.textContent = `meteo dal ${m.da.toLocaleDateString("it-IT", { day: "numeric", month: "short" })}`;
+        det?.remove();
+        return;
+      }
+      chip.classList.toggle("rain", m.pioggia);
+      const temp = m.tMax - m.tMin >= 2 ? `${m.tMin}–${m.tMax}°` : `${m.tMax}°`;
+      chip.textContent = `${m.icona} ${temp} · 💧${m.probMax}%`;
+      chip.title = `${m.descr}, pioggia fino al ${m.probMax}%, vento ${m.vento.kmh} km/h da ${m.vento.da}`;
+      if (!det) return;
+      const passo = Math.max(1, Math.ceil(m.ore.length / 5));
+      const ore = m.ore.filter((_, i) => i % passo === 0);
+      det.innerHTML = `<div class="wx-ore">${ore.map((o) => `<span><small>${oraBreve(o.t)}</small>${m.oraIcona(o)} <b>${Math.round(o.temp)}°</b></span>`).join("")}</div>
+        <div class="wx-txt">${m.piove ? `🌧️ Pioggia probabile dalle ${oraBreve(m.piove.t)} (fino al ${m.probMax}%)` : `💧 Pioggia improbabile (max ${m.probMax}%)`}
+          · 💨 vento fino a ${m.vento.kmh} km/h da ${m.vento.da}</div>
+        <div class="wx-src">${m.approx ? "Posizione del luogo non trovata: previsione su Rimini · " : ""}Previsione <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a></div>`;
+    }).catch(() => { chip.remove(); det?.remove(); });
+  }
 }
 
 function condividiUscita(u) {
@@ -1159,7 +1196,9 @@ async function sezioneAdmin(box) {
     <div class="card">
       <button class="btn accent block" id="b-luogo" style="margin-bottom:6px">+ Aggiungi un luogo</button>
       ${state.luoghi.map((l) => `
-      <div class="list-item"><div class="grow">${h(l.nome)}</div>
+      <div class="list-item"><div class="grow">${h(l.nome)}
+          <div class="meta">${l.lat != null ? `📍 ${l.lat.toFixed(4)}, ${l.lon.toFixed(4)}` : "📍 posizione non impostata"}</div></div>
+        <button class="btn ghost small" data-pos="${l.id}" aria-label="Posizione">📍</button>
         <button class="btn ghost small" data-ren="${l.id}">Rinomina</button>
         <button class="btn danger small" data-dl="${l.id}">✕</button></div>`).join("")}
       <p class="hint">Anche i soci possono aggiungere un luogo quando propongono un'uscita. Un luogo già usato da qualche uscita non si può eliminare, ma si può rinominare.</p>
@@ -1177,6 +1216,16 @@ async function sezioneAdmin(box) {
     const nome = await dialogo({ testo: "Nuovo nome del luogo", input: l.nome, ok: "Salva" });
     if (!nome || nome.trim() === l.nome) return;
     await prova(() => api.rinominaLuogo(l.id, nome.trim()), "Rinominato");
+    state.luoghi = await api.luoghi(); renderTab();
+  }));
+  box.querySelectorAll("[data-pos]").forEach((b) => (b.onclick = async () => {
+    const l = state.luoghi.find((x) => x.id === Number(b.dataset.pos));
+    const attuale = l.lat != null ? `${l.lat}, ${l.lon}` : "";
+    const v = await dialogo({ testo: "Posizione del luogo (serve per il meteo). Incolla un link di Google Maps o le coordinate tipo 44.0594, 12.5683. Lascia vuoto per cercarla in automatico dal nome.", input: attuale, ok: "Salva", max: 2000 });
+    if (v === null || v === undefined) return;
+    let c = v.trim() ? coordDaTesto(v.trim()) : await cercaPerNome(l.nome);
+    if (!c) { toast(v.trim() ? "Non riesco a leggere le coordinate" : "Luogo non trovato: incolla un link di Google Maps"); return; }
+    await prova(() => api.impostaCoordinateLuogo(l.id, c.lat, c.lon), "Posizione salvata");
     state.luoghi = await api.luoghi(); renderTab();
   }));
   box.querySelectorAll("[data-dl]").forEach((b) => (b.onclick = async () => {
@@ -1293,13 +1342,13 @@ function closeSheet() { $sheet.innerHTML = ""; document.body.style.overflow = ""
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
 
 // ---------- finestra di conferma interna (al posto di confirm/prompt) ----
-function dialogo({ testo, input = null, ok = "Conferma", pericolo = false }) {
+function dialogo({ testo, input = null, ok = "Conferma", pericolo = false, max = 80 }) {
   return new Promise((resolve) => {
     const d = document.createElement("div");
     d.className = "dlg-wrap";
     d.innerHTML = `<div class="dlg" role="alertdialog" aria-modal="true">
       <p>${h(testo)}</p>
-      ${input !== null ? `<input class="input" id="dlg-in" value="${h(input)}" maxlength="80">` : ""}
+      ${input !== null ? `<input class="input" id="dlg-in" value="${h(input)}" maxlength="${max}">` : ""}
       <div class="grid2" style="margin-top:14px">
         <button class="btn ghost" data-r="0">Indietro</button>
         <button class="btn ${pericolo ? "danger-fill" : "accent"}" data-r="1">${h(ok)}</button>

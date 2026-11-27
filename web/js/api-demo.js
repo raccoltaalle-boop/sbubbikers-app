@@ -22,7 +22,7 @@ function seed() {
     { id: 3, nome: "MTB / E-bike", emoji: "🚵", ordine: 3 },
   ];
   const luoghi = [
-    { id: 1, nome: "Piazzale Kennedy – Rimini", link_mappa: "https://maps.google.com/?q=Piazzale+Kennedy+Rimini", ordine: 1 },
+    { id: 1, nome: "Piazzale Kennedy – Rimini", link_mappa: "https://maps.google.com/?q=Piazzale+Kennedy+Rimini", lat: 44.0655, lon: 12.5850, ordine: 1 },
     { id: 2, nome: "Arco d'Augusto – Rimini", link_mappa: null, ordine: 2 },
     { id: 3, nome: "Stazione di Santarcangelo", link_mappa: null, ordine: 3 },
     { id: 4, nome: "Ponte di Tiberio – Rimini", link_mappa: null, ordine: 4 },
@@ -251,6 +251,7 @@ export function createApi() {
       if (db.luoghi.some((l) => l.nome.toLowerCase() === nome.toLowerCase())) throw new Error("Esiste già un elemento con questo nome");
       db.luoghi.push({ id: Math.max(0, ...db.luoghi.map((l) => l.id)) + 1, nome, link_mappa: null, ordine: 100 }); save();
     },
+    async impostaCoordinateLuogo(id, lat, lon) { const l = db.luoghi.find((x) => x.id === id); if (l && (l.lat == null || db.soci.find((x) => x.id === db.me)?.ruolo !== "socio")) { l.lat = lat; l.lon = lon; save(); } },
     async rinominaLuogo(id, nome) { soloAdmin(); db.luoghi.find((l) => l.id === id).nome = nome; save(); },
     async eliminaLuogo(id) {
       soloAdmin();
