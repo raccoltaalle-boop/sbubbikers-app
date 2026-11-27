@@ -144,7 +144,7 @@ function renderShell() {
   // vecchi indirizzi (?tab=profilo / ?tab=convenzioni) finiscono in "Altro"
   if (state.tab === "profilo" || state.tab === "convenzioni") { state.altro = state.tab === "profilo" ? "profilo" : "sconti"; state.tab = "altro"; }
   state.altro = state.altro || "profilo";
-  ALTRO = isSuper() ? [...ALTRO_BASE, ["accessi", "Accessi"]] : ALTRO_BASE;
+  ALTRO = isSuper() ? [...ALTRO_BASE, ["accessi", "Accessi"], ["fonti", "Fonti"]] : ALTRO_BASE;
   if (!ALTRO.some(([k]) => k === state.altro)) state.altro = "profilo";
   const tabs = TABS.filter((x) => !x.serve || typeof api[x.serve] === "function");
   if (!tabs.some((t) => t.id === state.tab)) state.tab = "uscite";
@@ -908,7 +908,7 @@ async function tabAltro(main) {
   main.innerHTML = `<div class="seg" style="margin-bottom:8px">${ALTRO.map(([k, l]) => `<button data-altro="${k}" aria-pressed="${state.altro === k}">${l}</button>`).join("")}</div><div id="altro-body"></div>`;
   main.querySelectorAll("[data-altro]").forEach((b) => (b.onclick = () => { state.altro = b.dataset.altro; window.scrollTo(0, 0); renderShell(); }));
   const body = main.querySelector("#altro-body");
-  await (state.altro === "sconti" ? tabConvenzioni(body) : state.altro === "accessi" ? tabAccessi(body) : tabProfilo(body));
+  await (state.altro === "sconti" ? tabConvenzioni(body) : state.altro === "accessi" ? tabAccessi(body) : state.altro === "fonti" ? tabFonti(body) : tabProfilo(body));
 }
 
 // ---------- ACCESSI (solo superadmin) ----------------------------------
@@ -1093,6 +1093,74 @@ function cardGara(g, d, dettaglio = false) {
     </div>
     ${isAdmin() ? `<div class="row-actions" style="grid-column:1/-1;margin-top:0"><button class="link-btn" data-gmod="${g.id}">Modifica</button><button class="link-btn" data-gdel="${g.id}">Elimina</button></div>` : ""}
   </article>`;
+}
+
+// ---------- fonti delle gare (solo superadmin) ---------------------------
+const CAT_FONTI = { ...CAT_GARE, varie: { lbl: "Varie", ico: "🏁" } };
+const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u; } };
+
+async function tabFonti(main) {
+  const fonti = await api.fontiGare();
+  main.innerHTML = `
+    <div class="card">
+      <p class="hint" style="margin-top:0">Le pagine web con i calendari che ti interessano. Visibili solo a te. Aprile, e quando trovi una gara utile toccala con <b>+ Gara</b>: il calendario della squadra si compila con il link alla fonte già pronto.</p>
+      <button class="btn accent block" id="f-nuova">+ Aggiungi pagina</button>
+    </div>
+    ${fonti.length ? `<div class="card">${fonti.map((f) => `
+      <div class="list-item fonte">
+        <div class="grow">
+          <div><b>${h(CAT_FONTI[f.categoria]?.ico)} ${h(f.nome)}</b></div>
+          <div class="meta"><a href="${safeUrl(f.url) || "#"}" target="_blank" rel="noopener" data-apri="${f.id}">${h(host(f.url))} ↗</a>
+            · ${f.ultimo_controllo ? `controllata ${h(quando(f.ultimo_controllo))}` : "mai controllata"}</div>
+          ${f.note ? `<div class="meta">${h(f.note)}</div>` : ""}
+          <div class="f-act">
+            <button class="btn ghost small" data-fok="${f.id}">✓ Controllata</button>
+            <button class="btn ghost small" data-fgara="${f.id}">+ Gara</button>
+            <button class="btn ghost small" data-fmod="${f.id}">Modifica</button>
+            <button class="btn danger small" data-fdel="${f.id}" aria-label="Elimina">✕</button>
+          </div>
+        </div>
+      </div>`).join("")}</div>` : `<div class="empty"><p>Nessuna pagina salvata.</p></div>`}`;
+  const trova = (id) => fonti.find((f) => f.id === id);
+  main.querySelector("#f-nuova").onclick = () => sheetFonte({}, () => tabFonti(main));
+  main.querySelectorAll("[data-fmod]").forEach((b) => (b.onclick = () => sheetFonte(trova(b.dataset.fmod), () => tabFonti(main))));
+  main.querySelectorAll("[data-fok]").forEach((b) => (b.onclick = async () => { await prova(() => api.segnaFonteControllata(b.dataset.fok), "Segnata come controllata"); tabFonti(main); }));
+  main.querySelectorAll("[data-fgara]").forEach((b) => (b.onclick = () => {
+    const f = trova(b.dataset.fgara);
+    sheetGara({ categoria: CAT_GARE[f.categoria] ? f.categoria : "mtb", link: f.url });
+  }));
+  main.querySelectorAll("[data-fdel]").forEach((b) => (b.onclick = async () => {
+    if (!(await dialogo({ testo: `Eliminare la pagina "${trova(b.dataset.fdel).nome}"? Le gare già inserite restano.`, ok: "Elimina", pericolo: true }))) return;
+    await prova(() => api.eliminaFonte(b.dataset.fdel), "Pagina eliminata"); tabFonti(main);
+  }));
+}
+
+function sheetFonte(f = {}, dopo) {
+  const cat = { v: f.categoria || "mtb" };
+  openSheet(f.id ? "Modifica pagina" : "Nuova pagina", `
+    <form id="f-fonte">
+      <div class="field"><label for="fo-url">Indirizzo della pagina</label><input class="input" type="url" id="fo-url" required maxlength="500" placeholder="https://" value="${h(f.url)}"></div>
+      <div class="field"><label for="fo-nome">Nome</label><input class="input" id="fo-nome" required maxlength="80" value="${h(f.nome)}" placeholder="Calendario FCI Emilia-Romagna"></div>
+      <div class="field"><span class="lbl">Categoria</span>
+        <div class="choice" id="fo-cat">${Object.entries(CAT_FONTI).map(([k, c]) => `<button type="button" class="chip" data-v="${k}" aria-pressed="${cat.v === k}">${c.ico} ${c.lbl}</button>`).join("")}</div></div>
+      <div class="field"><label for="fo-note">Note <span class="opt">(facolt.)</span></label><textarea class="input" id="fo-note" rows="2" maxlength="500" placeholder="Filtrare per regione, aggiornata il lunedì…">${h(f.note)}</textarea></div>
+      <div class="error" id="err"></div>
+      <button class="btn accent block" id="fo-save">Salva</button>
+    </form>`, (root) => {
+    const $ = (q) => root.querySelector(q);
+    root.querySelectorAll("#fo-cat .chip").forEach((b) => (b.onclick = () => { cat.v = b.dataset.v; root.querySelectorAll("#fo-cat .chip").forEach((x) => x.setAttribute("aria-pressed", x === b)); }));
+    $("#fo-url").onchange = () => { if (!$("#fo-nome").value.trim() && /^https?:\/\//i.test($("#fo-url").value)) $("#fo-nome").value = host($("#fo-url").value.trim()); };
+    $("#f-fonte").onsubmit = async (e) => {
+      e.preventDefault();
+      const url = $("#fo-url").value.trim();
+      if (!/^https?:\/\//i.test(url)) return ($("#err").textContent = "L'indirizzo deve iniziare con https://");
+      $("#fo-save").disabled = true;
+      try {
+        await prova(() => api.salvaFonte({ ...(f.id ? { id: f.id } : {}), url, nome: $("#fo-nome").value.trim(), categoria: cat.v, note: $("#fo-note").value.trim() || null }), "Pagina salvata");
+        closeSheet(); dopo?.();
+      } catch { $("#fo-save").disabled = false; }
+    };
+  });
 }
 
 function sheetGara(g = {}) {

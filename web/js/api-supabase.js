@@ -91,6 +91,10 @@ export function createApi(cfg) {
       if (id) return ok(await sb.from("gare").update(dati).eq("id", id));
       return ok(await sb.from("gare").insert({ ...dati, creato_da: me.id }));
     },
+    fontiGare: async () => ok(await sb.from("fonti_gare").select("*").order("categoria").order("nome")),
+    async salvaFonte({ id, ...d }) { return ok(id ? await sb.from("fonti_gare").update(d).eq("id", id) : await sb.from("fonti_gare").insert(d)); },
+    eliminaFonte: async (id) => ok(await sb.from("fonti_gare").delete().eq("id", id)),
+    segnaFonteControllata: async (id) => ok(await sb.from("fonti_gare").update({ ultimo_controllo: new Date().toISOString() }).eq("id", id)),
     eliminaGara: async (id) => ok(await sb.from("gare").delete().eq("id", id)),
 
     // ----- uscite

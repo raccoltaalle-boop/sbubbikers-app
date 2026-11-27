@@ -82,6 +82,7 @@ export function createApi() {
   const wait = (x) => new Promise((r) => setTimeout(() => r(structuredClone(x)), 120));
   const socio = (id) => db.soci.find((s) => s.id === id);
   const meObj = () => (db.me ? socio(db.me) : null);
+  const soloSuper = () => { if (meObj()?.ruolo !== "superadmin") throw new Error("Solo superadmin"); };
   const soloAdmin = () => { if (!["admin", "superadmin"].includes(meObj()?.ruolo)) throw new Error("Solo admin"); };
   const codice = () => Array.from({ length: 8 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
 
@@ -189,6 +190,19 @@ export function createApi() {
       else db.gare.push({ ...g, id: uid(), adesioni: [] });
       save();
     },
+    fontiGare() {
+      soloSuper();
+      db.fonti ??= [{ id: "f1", nome: "Pianeta Mountain Bike", url: "https://www.pianetamountainbike.it/calendario-gare-mtb", categoria: "mtb", note: "Calendario nazionale MTB, filtrabile per regione", ultimo_controllo: null }];
+      return wait([...db.fonti].sort((a, b) => a.categoria.localeCompare(b.categoria) || a.nome.localeCompare(b.nome)));
+    },
+    async salvaFonte({ id, ...d }) {
+      soloSuper(); db.fonti ??= [];
+      if (id) Object.assign(db.fonti.find((f) => f.id === id), d);
+      else db.fonti.push({ id: "f" + Date.now(), ultimo_controllo: null, ...d });
+      save();
+    },
+    async eliminaFonte(id) { soloSuper(); db.fonti = db.fonti.filter((f) => f.id !== id); save(); },
+    async segnaFonteControllata(id) { soloSuper(); db.fonti.find((f) => f.id === id).ultimo_controllo = new Date().toISOString(); save(); },
     async eliminaGara(id) { soloAdmin(); db.gare = db.gare.filter((g) => g.id !== id); save(); },
 
     // ----- divise

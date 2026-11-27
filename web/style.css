@@ -375,3 +375,8 @@ details.more summary { font-weight: 700; color: var(--accent); cursor: pointer; 
   .ride .wx { background: #0c447c; color: #e6f1fb; }
   .ride .wx.rain { background: #633806; color: #faeeda; }
 }
+
+/* ---------- fonti gare (superadmin) ---------- */
+.fonte .meta a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.fonte .f-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.fonte .f-act .btn.small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
