@@ -40,11 +40,30 @@ async function cercaNominatim(q, bounded) {
   return x ? { lat: Number(x.lat), lon: Number(x.lon) } : null;
 }
 
+// Prova varianti del nome: intero, pezzi separati da trattini/virgole, senza "Bar/Ristorante…",
+// la sola via, e versioni accorciate ("Parco degli Artisti Ciclabile Marecchia" → "Parco degli Artisti").
+export function variantiNome(nome) {
+  const base = String(nome).trim();
+  const out = [base];
+  const pezzi = base.split(/\s[–-]\s|,|\(|\)/).map((x) => x.trim()).filter((x) => x.length > 2);
+  out.push(...pezzi);
+  for (const x of pezzi) {
+    const senza = x.replace(/^(bar|caff[eè]|ristorante|pizzeria|piadineria|gelateria|parcheggio|chiosco)\s+/i, "");
+    out.push(senza);
+    const via = senza.match(/\b((?:via|viale|piazza|piazzale|corso|largo)\s.+)$/i);
+    if (via) { out.push(senza.slice(0, via.index).trim()); out.push(via[1]); }
+    const parole = senza.split(/\s+/);
+    for (let n = parole.length - 1; n >= 2; n--) if (!/^(di|del|dei|degli|della|delle|da|in|a|al|alla|e|via|viale)$/i.test(parole[n - 1])) out.push(parole.slice(0, n).join(" "));
+  }
+  return [...new Set(out.filter((x) => x.length > 2))].slice(0, 7);
+}
+
 export async function cercaPerNome(nome) {
-  const pezzi = [nome, ...String(nome).split(/\s[–-]\s|,|\(|\)/).map((s) => s.trim()).filter((s) => s.length > 2)];
-  const tentativi = [...new Set(pezzi)];
-  for (const q of tentativi) {
-    try { const c = (await cercaNominatim(q, true)) || (await cercaNominatim(q + ", Rimini", false)); if (c) return c; }
+  let primo = true;
+  for (const q of variantiNome(nome)) {
+    if (!primo) await new Promise((r) => setTimeout(r, 1100));   // regole d'uso di Nominatim: max 1 richiesta al secondo
+    primo = false;
+    try { const c = await cercaNominatim(q, true); if (c) return c; }
     catch { return null; }
   }
   return null;
