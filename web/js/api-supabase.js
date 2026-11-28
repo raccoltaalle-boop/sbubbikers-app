@@ -110,7 +110,9 @@ export function createApi(cfg) {
     // ----- uscite
     async uscite() {
       const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
-      const rows = ok(await sb.from("uscite").select(USCITA_SELECT).gte("data_ora", oggi.toISOString()).order("data_ora"));
+      // le annullate spariscono dal giorno dopo l'annullamento
+      const rows = ok(await sb.from("uscite").select(USCITA_SELECT).gte("data_ora", oggi.toISOString())
+        .or(`annullata.eq.false,annullata_at.gte."${oggi.toISOString()}"`).order("data_ora"));
       return rows.map(normUscita);
     },
     async creaUscita(d) {

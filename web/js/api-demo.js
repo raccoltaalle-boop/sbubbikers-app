@@ -103,7 +103,7 @@ export function createApi() {
 
     async uscite() {
       const oggi = new Date(); oggi.setHours(0, 0, 0, 0);
-      return wait(db.uscite.filter((u) => new Date(u.data_ora) >= oggi)
+      return wait(db.uscite.filter((u) => new Date(u.data_ora) >= oggi && (!u.annullata || !u.annullata_at || new Date(u.annullata_at) >= oggi))
         .sort((a, b) => a.data_ora.localeCompare(b.data_ora))
         .map((u) => ({
           ...u,
@@ -133,7 +133,7 @@ export function createApi() {
       if (si) u.partecipanti.push(db.me);
       save();
     },
-    async annullaUscita(id) { db.uscite.find((x) => x.id === id).annullata = true; save(); },
+    async annullaUscita(id) { const u = db.uscite.find((x) => x.id === id); u.annullata = true; u.annullata_at = new Date().toISOString(); save(); },
 
     avvisi: () => wait([...db.avvisi].sort((a, b) => b.created_at.localeCompare(a.created_at)).map((a) => ({ ...a, autore: socio(a.autore_id) }))),
     async creaAvviso(a) { soloAdmin(); db.avvisi.push({ id: uid(), ...a, autore_id: db.me, created_at: new Date().toISOString() }); save(); },
