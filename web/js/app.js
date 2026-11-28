@@ -193,17 +193,18 @@ async function renderTab() {
 // ---------- USCITE -----------------------------------------------------
 function cardCompleanni(lista) {
   if (!lista?.length) return "";
-  const oggi = lista.filter((c) => c.tra_giorni === 0), poi = lista.filter((c) => c.tra_giorni > 0);
+  const oggi = lista.filter((c) => c.tra_giorni === 0);
   const quando = (c) => {
+    if (c.tra_giorni === 0) return "oggi 🎉";
     if (c.tra_giorni === 1) return "domani";
     const d = new Date(); d.setDate(d.getDate() + c.tra_giorni);
     return d.toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "numeric" });
   };
-  return `<div class="bday">
-    <div class="bday-ico">🎂</div>
-    <div>${oggi.length ? `<b>Oggi compie gli anni ${oggi.map((c) => h(`${c.nome} ${c.cognome}`)).join(" e ")}!</b>` : "<b>Compleanni in arrivo</b>"}
-      ${poi.length ? `<div class="meta">${oggi.length ? "Prossimi: " : ""}${poi.map((c) => `${h(nomeBreve(c))} ${quando(c)}`).join(" · ")}</div>` : ""}</div>
-  </div>`;
+  const riassunto = oggi.length ? `oggi ${oggi.map((c) => h(nomeBreve(c))).join(", ")}` : `${lista.length} in settimana`;
+  return `<details class="bday" ${state.bdayAperto ? "open" : ""}>
+    <summary><span>🎂 Compleanni</span><span class="bday-sum ${oggi.length ? "oggi" : ""}">${riassunto}</span><span class="bday-chev">⌄</span></summary>
+    <ul>${lista.map((c) => `<li><span>${h(`${c.nome} ${c.cognome}`)}</span><span class="${c.tra_giorni === 0 ? "oggi" : ""}">${quando(c)}</span></li>`).join("")}</ul>
+  </details>`;
 }
 
 async function tabUscite(main) {
@@ -232,6 +233,7 @@ async function tabUscite(main) {
     main.innerHTML = html + `</div>`;
   }
 
+  main.querySelector("details.bday")?.addEventListener("toggle", (e) => { state.bdayAperto = e.target.open; });
   main.querySelectorAll("[data-f]").forEach((b) => (b.onclick = () => { state.filtroTipo = b.dataset.f ? Number(b.dataset.f) : null; tabUscite(main); }));
   main.querySelectorAll("[data-join]").forEach((b) => (b.onclick = async () => {
     b.disabled = true;
