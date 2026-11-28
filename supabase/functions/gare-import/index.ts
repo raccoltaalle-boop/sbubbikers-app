@@ -15,12 +15,6 @@ const CORS = {
 };
 const UA = "SBUBBIKERS-app/1.0 (calendario interno della squadra; https://app.sbubbikers.com)";
 
-function chiaveServizio() {
-  try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default; if (k) return k; } catch { /* ignora */ }
-  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-}
-const sb = createClient(Deno.env.get("SUPABASE_URL")!, chiaveServizio(), { auth: { persistSession: false } });
-
 const risposta = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 
@@ -106,14 +100,15 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return risposta({ error: "Metodo non consentito" }, 405);
   try {
-    // chi chiama? deve essere il superadmin
-    const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-    const { data: u } = await sb.auth.getUser(jwt);
-    if (!u?.user) return risposta({ error: "Accesso non valido" }, 401);
-    const { data: disp } = await sb.from("dispositivi").select("socio:soci(ruolo,attivo)").eq("user_id", u.user.id).maybeSingle();
-    // deno-lint-ignore no-explicit-any
-    const socio = (disp as any)?.socio;
-    if (!socio?.attivo || socio.ruolo !== "superadmin") return risposta({ error: "Solo superadmin" }, 403);
+    // chi chiama? Si usa il suo stesso accesso: le regole del database (RLS) fanno il resto
+    const auth = req.headers.get("Authorization") ?? "";
+    const apikey = req.headers.get("apikey") ?? "";
+    if (!auth || !apikey) return risposta({ error: "Accesso non valido" }, 401);
+    const sb = createClient(Deno.env.get("SUPABASE_URL")!, apikey, {
+      auth: { persistSession: false }, global: { headers: { Authorization: auth } } });
+    const { data: superadmin, error: eSa } = await sb.rpc("is_superadmin");
+    if (eSa) return risposta({ error: "Accesso non valido" }, 401);
+    if (superadmin !== true) return risposta({ error: "Solo superadmin" }, 403);
 
     const { fonte_id, regione } = await req.json();
     const { data: fonte } = await sb.from("fonti_gare").select("url").eq("id", fonte_id).maybeSingle();
