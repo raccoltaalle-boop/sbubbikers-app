@@ -82,8 +82,8 @@ function renderLogin(codice) {
   $app.innerHTML = `
     ${DEMO ? `<div class="demo-banner">Modalità demo · codice di prova <b>DEMO2026</b></div>` : ""}
     <section class="login">
-      <div class="logo-mark">SB</div>
-      <h1>${h(cfg.NOME_SQUADRA || "SBUBBIKERS")}<br><span>Si pedala.</span></h1>
+      <img class="logo-mark" src="icons/icon-192.png" alt="">
+      <h1>${h(cfg.NOME_SQUADRA || "Sbubbikers")}<br><span>Si pedala.</span></h1>
       <p>${codice ? "Hai ricevuto un invito personale. Tocca <b>Entra</b> per collegare questo dispositivo." : "Inserisci il codice personale che ti ha mandato un admin della squadra."}</p>
       <form id="f-login">
         <div class="field"><input class="input code-input" id="codice" maxlength="12" autocomplete="one-time-code" autocapitalize="characters"
@@ -116,7 +116,7 @@ function renderLogin(codice) {
 function renderBenvenuto(me, codice) {
   $app.innerHTML = `
     <section class="login">
-      <div class="logo-mark">SB</div>
+      <img class="logo-mark" src="icons/icon-192.png" alt="">
       <h1>Ciao<br><span>${h(me.nome)}!</span></h1>
       <p>Questo dispositivo è collegato. Prima di iniziare, salvati il tuo codice: serve se cambi telefono o installi l'app sulla schermata Home.</p>
       <div class="code-box"><span class="meta">IL TUO CODICE</span><strong>${h(codice)}</strong>
@@ -153,7 +153,7 @@ function renderShell() {
   $app.innerHTML = `
     ${DEMO ? `<div class="demo-banner">Modalità demo: i dati restano su questo dispositivo · <button id="demo-reset">azzera</button></div>` : ""}
     <header class="topbar" id="topbar">
-      <div><span class="brand">${h(cfg.NOME_SQUADRA || "SBUBBIKERS")}</span><h1>${t.titolo}</h1></div>
+      <div><span class="brand">${h(cfg.NOME_SQUADRA || "Sbubbikers")}</span><h1>${t.titolo}</h1></div>
       <button class="icon-btn" id="refresh" aria-label="Aggiorna">↻</button>
     </header>
     <main id="main"><div class="spinner"></div></main>
@@ -1381,7 +1381,7 @@ async function sezioneAdmin(box) {
 }
 
 function messaggioInvito(nome, codice) {
-  return `Ciao ${nome}! 🚴 Ecco il tuo accesso personale all'app ${cfg.NOME_SQUADRA || "SBUBBIKERS"}:\n👉 ${linkInvito(codice)}\n\nIl tuo codice è ${codice}: conservalo, serve se installi l'app sulla schermata Home o cambi telefono. Non girarlo ad altri, è solo tuo.`;
+  return `Ciao ${nome}! 🚴 Ecco il tuo accesso personale all'app ${cfg.NOME_SQUADRA || "Sbubbikers"}:\n👉 ${linkInvito(codice)}\n\nIl tuo codice è ${codice}: conservalo, serve se installi l'app sulla schermata Home o cambi telefono. Non girarlo ad altri, è solo tuo.`;
 }
 
 function bloccoInvito(nome, codice) {
