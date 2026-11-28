@@ -61,7 +61,7 @@ input, select, textarea { font: inherit; color: var(--ink); }
 .topbar .brand { font: 700 13px/1 var(--display); letter-spacing: 1px; color: var(--accent); display: block; margin-bottom: 4px; }
 .icon-btn { background: var(--card); border: 1px solid var(--line); border-radius: 12px; width: 40px; height: 40px; display: grid; place-items: center; font-size: 18px; }
 
-main { flex: 1; padding: 6px 16px calc(110px + var(--safe-b)); }
+main { flex: 1; padding: 6px 16px calc(150px + var(--safe-b)); }
 
 /* ----- chips / filtri ----- */
 .chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 12px; scrollbar-width: none; }
@@ -124,11 +124,11 @@ main { flex: 1; padding: 6px 16px calc(110px + var(--safe-b)); }
 
 .fab {
   position: fixed; right: max(20px, calc(50% - 300px)); bottom: calc(84px + var(--safe-b)); z-index: 6;
-  background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 18px; height: 56px; padding: 0 20px;
-  font: 800 20px/1 var(--display); text-transform: uppercase; letter-spacing: .5px; box-shadow: 0 8px 24px rgba(255,90,31,.35);
+  background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 16px; height: 48px; padding: 0 16px;
+  font: 800 17px/1 var(--display); text-transform: uppercase; letter-spacing: .5px; box-shadow: 0 8px 24px rgba(255,90,31,.35);
   display: flex; align-items: center; gap: 8px;
 }
-.fab span { font-size: 28px; line-height: 0; margin-top: -2px; }
+.fab span { font-size: 24px; line-height: 0; margin-top: -2px; }
 
 /* ----- card generiche ----- */
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin: 10px 0; }
