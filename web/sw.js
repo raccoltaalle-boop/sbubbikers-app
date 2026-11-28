@@ -1,9 +1,9 @@
 // Service worker: rende l'app installabile e apribile anche con rete scarsa.
 // Strategia "prima la rete, senza cache HTTP": si vedono sempre i file aggiornati;
 // la copia locale serve solo quando manca la connessione.
-const CACHE = "sbb-v8";
+const CACHE = "sbb-v9";
 const SHELL = ["./", "index.html", "style.css", "js/config.js", "js/app.js", "js/api-supabase.js", "js/api-demo.js", "js/meteo.js",
-  "manifest.webmanifest", "icons/icon-192.png"];
+  "manifest.webmanifest", "icons/icon2-192.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));

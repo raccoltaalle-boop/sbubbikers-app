@@ -82,7 +82,7 @@ function renderLogin(codice) {
   $app.innerHTML = `
     ${DEMO ? `<div class="demo-banner">Modalità demo · codice di prova <b>DEMO2026</b></div>` : ""}
     <section class="login">
-      <img class="logo-mark" src="icons/icon-192.png" alt="">
+      <img class="logo-mark" src="icons/icon2-192.png" alt="">
       <h1>${h(cfg.NOME_SQUADRA || "Sbubbikers")}<br><span>Si pedala.</span></h1>
       <p>${codice ? "Hai ricevuto un invito personale. Tocca <b>Entra</b> per collegare questo dispositivo." : "Inserisci il codice personale che ti ha mandato un admin della squadra."}</p>
       <form id="f-login">
@@ -116,7 +116,7 @@ function renderLogin(codice) {
 function renderBenvenuto(me, codice) {
   $app.innerHTML = `
     <section class="login">
-      <img class="logo-mark" src="icons/icon-192.png" alt="">
+      <img class="logo-mark" src="icons/icon2-192.png" alt="">
       <h1>Ciao<br><span>${h(me.nome)}!</span></h1>
       <p>Questo dispositivo è collegato. Prima di iniziare, salvati il tuo codice: serve se cambi telefono o installi l'app sulla schermata Home.</p>
       <div class="code-box"><span class="meta">IL TUO CODICE</span><strong>${h(codice)}</strong>
